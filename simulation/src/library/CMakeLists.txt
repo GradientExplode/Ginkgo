@@ -159,7 +159,7 @@ endif ( TORCH_FOUND AND GINKGO_USE_TORCH AND GINKGO_TORCH_CUDA_IMPLEMENTATION )
 
 add_library( gkg-simulation SHARED ${SOURCES} )
 set_property( TARGET gkg-simulation PROPERTY VERSION ${${PROJECT_NAME}_VERSION} )
-target_link_libraries( gkg-simulation gkg-dmri ${Kokkos_LIBRARIES} PRIVATE cuda cudart )
+target_link_libraries( gkg-simulation gkg-dmri ${Kokkos_LIBRARIES} cuda cudart )
 
 
 
