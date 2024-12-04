@@ -139,7 +139,7 @@ endif()
 
 find_package( BLAS QUIET )
 find_package( LAPACK QUIET )
-find_package( GSL QUIET )
+find_package( GSL REQUIRED )
 find_package( X11 QUIET )
 find_package( CUDA REQUIRED )
 find_package( PIO QUIET )
