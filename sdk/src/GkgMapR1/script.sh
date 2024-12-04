@@ -1,0 +1,1 @@
+GkgDiffeomorphicRegistrationScalar -reference reference/t2.ima -floating floating/t2.ima -regularizationWeighting 5.0 -halfWidthSearchSpace 4 -controlPointsSpacing 8 -searchSpaceQuantisation 1.0 -output floating_deformed.ima -verbose

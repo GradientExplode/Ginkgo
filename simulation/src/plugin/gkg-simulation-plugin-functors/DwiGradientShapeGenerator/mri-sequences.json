@@ -1,0 +1,94 @@
+attributes = {
+  'my-sequence-01' : 
+    {
+
+      'type' : 'ogse',
+      'parameters' :
+        {
+
+          'echo_time_in_ms' : 60,
+          'waveform_type' : 'trapezoid-cosine',
+          'time_offset_to_diffusion_module_in_ms' : 1.0,
+          'period_in_ms' : 2,
+          'period_count' : 14,
+          'big_delta_in_ms' : 30.0,
+          'maximum_gradient_slew_rate_in_tesla_per_m_per_s': 9000,
+          'gradient_time_resolution_in_us' : 1.0,
+          'gradient_magnitudes' :
+            (
+
+              ( 950.0 )
+
+            ),
+          'gradient_orientations' :
+            (
+
+              ( ( 1.0, 0.0, 0.0 ), ( 0.0, 1.0, 0.0 ), ( 0.0, 0.0, 1.0 ) )
+
+            ),
+          'noise_standard_deviation' : 0.1
+        }
+
+    },
+  'my-sequence-02' : 
+    {
+
+      'type' : 'pgse',
+      'parameters' :
+        {
+
+          'echo_time_in_ms' : 94.0,
+          'time_offset_to_diffusion_module_in_ms' : 10.0,
+          'little_delta_in_ms' : 25.3,
+          'big_delta_in_ms' : 35.3,
+          'maximum_gradient_slew_rate_in_tesla_per_m_per_s': 200,
+          'gradient_time_resolution_in_us' : 10.0,
+          'gradient_magnitudes' :
+            (
+
+              ( 80.0 ),
+
+            ),
+          'gradient_orientations' :
+            (
+
+              20
+
+            ),
+          'noise_standard_deviation' : 0.0
+
+        }
+
+    },
+  'my-sequence-03' : 
+    {
+
+      'type' : 'pgse',
+      'parameters' :
+        {
+
+          'echo_time_in_ms' : 24.0,
+          'time_offset_to_diffusion_module_in_ms' : 0.0,
+          'little_delta_in_ms' : 5.0,
+          'big_delta_in_ms' : 13.3,
+          'maximum_gradient_slew_rate_in_tesla_per_m_per_s': 9000,
+          'gradient_time_resolution_in_us' : 1.0,
+          'gradient_magnitudes' :
+            (
+
+              ( 986 ),
+
+            ),
+          'gradient_orientations' :
+            (
+
+              20
+
+            ),
+          'noise_standard_deviation' : 0.0
+
+        }
+
+    }
+
+}

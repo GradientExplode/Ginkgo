@@ -1,0 +1,4 @@
+#! /bin/bash
+
+mpirun -v -display-allocation -np 8 GkgExecuteCommand MpiTest
+

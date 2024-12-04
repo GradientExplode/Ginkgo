@@ -1,0 +1,37 @@
+<RCC>
+  <qresource prefix="voi">
+    <file>icon/arrow.png</file>
+    <file>icon/brush.png</file>
+    <file>icon/clear_all.png</file>
+    <file>icon/clear_label.png</file>
+    <file>icon/closing.png</file>
+    <file>icon/color_picker.png</file>
+    <file>icon/color_wheel.png</file>
+    <file>icon/contour.png</file>
+    <file>icon/cylinder_axial.png</file>
+    <file>icon/cylinder_coronal.png</file>
+    <file>icon/cylinder.png</file>
+    <file>icon/cylinder_sagittal.png</file>
+    <file>icon/dilation.png</file>
+    <file>icon/distancemap.png</file>
+    <file>icon/erosion.png</file>
+    <file>icon/exit.png</file>
+    <file>icon/eye_closed.png</file>
+    <file>icon/eye_opened.png</file>
+    <file>icon/fill_color.png</file>
+    <file>icon/focus.png</file>
+    <file>icon/histogram.png</file>
+    <file>icon/magic_wand.png</file>
+    <file>icon/open_file.png</file>
+    <file>icon/opening.png</file>
+    <file>icon/profile.png</file>
+    <file>icon/region.png</file>
+    <file>icon/ruler.png</file>
+    <file>icon/save_file.png</file>
+    <file>icon/save_stat.png</file>
+    <file>icon/spline.png</file>
+    <file>icon/statistic.png</file>
+    <file>icon/view3d.png</file>
+  </qresource>
+</RCC>
+

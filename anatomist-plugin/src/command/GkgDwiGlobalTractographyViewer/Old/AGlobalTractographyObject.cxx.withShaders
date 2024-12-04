@@ -1,0 +1,1382 @@
+#include "AGlobalTractographyObject.h"
+#include "ASpinGlassShader.h"
+#include "ASpinGlassConnectionShader.h"
+#include <gkg-dmri-global-tractography/AnatomicalPriors.h>
+#include <gkg-core-exception/Exception.h>
+//#include <gkg-communication-plugin/PluginLoader.h>
+#include <gkg-communication-sysinfo/ConfigurationInfo.h>
+#include <gkg-core-io/StringConverter.h>
+#include <anatomist/object/actions.h>
+
+
+
+int32_t gkg::AGlobalTractographyObject::_classType = 
+                                gkg::AGlobalTractographyObject::registerClass();
+Tree* gkg::AGlobalTractographyObject::_optionTree = 0;
+
+
+gkg::AGlobalTractographyObject::AGlobalTractographyObject( 
+                       const gkg::RCPointer< gkg::SpinGlassAndConnectionMap >& 
+                                                     spinGlassAndConnectionMap )
+                               : anatomist::SliceableObject(),
+                                 _spinGlassAndConnectionMap(
+                                                    spinGlassAndConnectionMap ),
+                                 _glSpinGlassList( 0 ),
+                                 _qGLSpinGlassShaderProgram( 0 ),
+                                 _qGLSpinGlassShader( 0 ),
+                                 _glSpinGlassConnectionList( 0 ),
+                                 _qGLSpinGlassConnectionShaderProgram( 0 ),
+                                 _qGLSpinGlassConnectionShader( 0 )
+{
+
+  try
+  {
+
+    // initializing the plugin(s)
+    //gkg::PluginLoader::getInstance().load( true );
+
+    // adding icon
+    _type = _classType;
+    _referential = 0;
+
+    // uniforms of spin glasses
+    _uniformIsShaderedSpinGlassObject = 0;
+    _uniformLocationSpinGlassExtremities = 0;
+    _uniformLocationSpinGlassColorValues = 0;
+
+    // uniforms of spin glass connections
+    _uniformIsShaderedSpinGlassConnectionObject = 0;
+    _uniformLocationSpinGlassConnectionExtremities = 0;
+    _uniformLocationSpinGlassConnectionColorValues = 0;
+
+
+    /*anatomist::AObjectPalette* palette = new anatomist::AObjectPalette( 
+                           theAnatomist->palettes().find( "Rainbow1-fusion" ) );
+    _palette = new AimsData< AimsRGBA >( palette->colors()->clone() );
+
+    if ( QObjectTree::TypeNames.find( _classType ) ==
+         QObjectTree::TypeNames.end() )
+    {
+
+      std::string iconPath = 
+        gkg::ConfigurationInfo::getInstance().getIconPath( "icon-odf.png" );
+
+      if ( !QObjectTree::TypeIcons[ _classType ].load( iconPath.c_str() ) )
+      {
+
+        QObjectTree::TypeIcons.erase( _classType );
+        std::cerr << "icon " << iconPath << " not found!" << std::endl;
+
+      }
+
+      QObjectTree::TypeNames[ _classType ] = "Real-Time BUNDLEMAP";
+
+    }
+
+    _material.SetDiffuseA( 0.01f * float( opacity ) );*/
+
+  }
+  GKG_CATCH( "gkg::AGlobalTractographyObject::AGlobalTractographyObject( "
+             "const gkg::RCPointer< gkg::SpinGlassAndConnectionMap >& "
+             "spinGlassAndConnectionMap )" );
+
+}
+
+
+gkg::AGlobalTractographyObject::~AGlobalTractographyObject()
+{
+
+  try
+  {
+
+    cleanup();
+    clear();
+
+    if ( _glSpinGlassList )
+    {
+
+      delete _glSpinGlassList;
+
+    }
+
+    if ( _qGLSpinGlassShader )
+    {
+
+      delete _qGLSpinGlassShader;
+
+    }
+
+    if ( _qGLSpinGlassShaderProgram )
+    {
+
+      delete _qGLSpinGlassShaderProgram;
+
+    }
+
+    if ( _glSpinGlassConnectionList )
+    {
+
+      delete _glSpinGlassConnectionList;
+
+    }
+
+    if ( _qGLSpinGlassConnectionShader )
+    {
+
+      delete _qGLSpinGlassConnectionShader;
+
+    }
+
+    if ( _qGLSpinGlassConnectionShaderProgram )
+    {
+
+      delete _qGLSpinGlassConnectionShaderProgram;
+
+    }
+
+  }
+  GKG_CATCH( "gkg::AGlobalTractographyObject::~AGlobalTractographyObject()" );
+
+}
+
+
+bool gkg::AGlobalTractographyObject::Is2DObject()
+{
+
+  try
+  {
+
+    return true;
+
+  }
+  GKG_CATCH( "bool gkg::AGlobalTractographyObject::Is2DObject()" );
+
+}
+
+
+bool gkg::AGlobalTractographyObject::Is3DObject()
+{
+
+  try
+  {
+
+    return true;
+
+  }
+  GKG_CATCH( "bool gkg::AGlobalTractographyObject::Is3DObject()" );
+
+}
+
+
+Tree* gkg::AGlobalTractographyObject::optionTree() const
+{
+
+  try
+  {
+
+    if ( !_optionTree )
+    {
+
+      _optionTree = new Tree( true, "option tree" );
+
+      Tree* t;
+      Tree* t2;
+
+      // color menu
+      Tree* tree = new Tree( true, "Color" );
+      _optionTree->insert( tree );
+
+      Tree* tree2 = new Tree( true, "Spin glass material" );
+      tree2->setProperty( "callback",
+                          &anatomist::ObjectActions::colorMaterial );
+      tree->insert( tree2 );
+
+      tree2 = new Tree( true, "Spin glass connection material" );
+      tree2->setProperty( "callback",
+                          &anatomist::ObjectActions::colorMaterial );
+      tree->insert( tree2 );
+
+      // referential menu
+      tree = new Tree( true, "Referential" );
+      _optionTree->insert( tree );
+      tree2 = new Tree( true, "Load" );
+      tree2->setProperty( "callback",
+                          &anatomist::ObjectActions::referentialLoad );
+      tree->insert( tree2 );
+
+    }
+
+    return _optionTree;
+
+  }
+  GKG_CATCH( "Tree* gkg::AGlobalTractographyObject::optionTree() const" );
+
+}
+
+
+float gkg::AGlobalTractographyObject::MinX2D() const
+{
+
+  try
+  {
+
+    if ( _spinGlassAndConnectionMap->getAnatomicalPriors().isNull() )
+    {
+
+      return 0.0;
+
+    }
+    return _spinGlassAndConnectionMap->getAnatomicalPriors()->getLowerX();
+
+  }
+  GKG_CATCH( "float gkg::AGlobalTractographyObject::MinX2D() const" );
+
+}
+
+
+
+float gkg::AGlobalTractographyObject::MinY2D() const
+{
+
+  try
+  {
+
+    if ( _spinGlassAndConnectionMap->getAnatomicalPriors().isNull() )
+    {
+
+      return 0.0;
+
+    }
+    return _spinGlassAndConnectionMap->getAnatomicalPriors()->getLowerY();
+
+  }
+  GKG_CATCH( "float gkg::AGlobalTractographyObject::MinY2D() const" );
+
+}
+
+
+
+float gkg::AGlobalTractographyObject::MinZ2D() const
+{
+
+  try
+  {
+
+    if ( _spinGlassAndConnectionMap->getAnatomicalPriors().isNull() )
+    {
+
+      return 0.0;
+
+    }
+    return _spinGlassAndConnectionMap->getAnatomicalPriors()->getLowerZ();
+
+  }
+  GKG_CATCH( "float gkg::AGlobalTractographyObject::MinZ2D() const" );
+
+}
+
+
+float gkg::AGlobalTractographyObject::MaxX2D() const
+{
+
+  try
+  {
+
+    if ( _spinGlassAndConnectionMap->getAnatomicalPriors().isNull() )
+    {
+
+      return 0.0;
+
+    }
+    return _spinGlassAndConnectionMap->getAnatomicalPriors()->getUpperX();
+
+  }
+  GKG_CATCH( "float gkg::AGlobalTractographyObject::MaxX2D() const" );
+
+}
+
+
+
+float gkg::AGlobalTractographyObject::MaxY2D() const
+{
+
+  try
+  {
+
+    if ( _spinGlassAndConnectionMap->getAnatomicalPriors().isNull() )
+    {
+
+      return 0.0;
+
+    }
+    return _spinGlassAndConnectionMap->getAnatomicalPriors()->getUpperY();
+
+  }
+  GKG_CATCH( "float gkg::AGlobalTractographyObject::MaxY2D() const" );
+
+}
+
+
+
+float gkg::AGlobalTractographyObject::MaxZ2D() const
+{
+
+  try
+  {
+
+    if ( _spinGlassAndConnectionMap->getAnatomicalPriors().isNull() )
+    {
+
+      return 0.0;
+
+    }
+    return _spinGlassAndConnectionMap->getAnatomicalPriors()->getUpperZ();
+
+  }
+  GKG_CATCH( "float gkg::AGlobalTractographyObject::MaxZ2D() const" );
+
+}
+
+
+bool gkg::AGlobalTractographyObject::boundingBox( Point3df& lowerCorner,
+                                                  Point3df& upperCorner ) const
+{
+
+  try
+  {
+
+    if ( _spinGlassAndConnectionMap->getAnatomicalPriors().isNull() )
+    {
+
+      lowerCorner[ 0 ] = 0.0;
+      lowerCorner[ 1 ] = 0.0;
+      lowerCorner[ 2 ] = 0.0;
+
+      upperCorner[ 0 ] = 0.0;
+      upperCorner[ 1 ] = 0.0;
+      upperCorner[ 2 ] = 0.0;
+
+    }
+    else
+    {
+      lowerCorner[ 0 ] =
+                 _spinGlassAndConnectionMap->getAnatomicalPriors()->getLowerX();
+      lowerCorner[ 1 ] =
+                 _spinGlassAndConnectionMap->getAnatomicalPriors()->getLowerY();
+      lowerCorner[ 2 ] =
+                 _spinGlassAndConnectionMap->getAnatomicalPriors()->getLowerZ();
+
+      upperCorner[ 0 ] =
+                 _spinGlassAndConnectionMap->getAnatomicalPriors()->getUpperX();
+      upperCorner[ 1 ] =
+                 _spinGlassAndConnectionMap->getAnatomicalPriors()->getUpperY();
+      upperCorner[ 2 ] =
+                 _spinGlassAndConnectionMap->getAnatomicalPriors()->getUpperZ();
+
+    }
+
+    if ( lowerCorner[ 0 ] == upperCorner[ 0 ] )
+    {
+
+      upperCorner[ 0 ] = lowerCorner[ 0 ] + 1;
+
+    }
+    if ( lowerCorner[ 1 ] == upperCorner[ 1 ] )
+    {
+
+      upperCorner[ 1 ] = lowerCorner[ 1 ] + 1;
+
+    }
+    if ( lowerCorner[ 2 ] == upperCorner[ 2 ] )
+    {
+
+      upperCorner[ 2 ] = lowerCorner[ 2 ] + 1;
+
+    }
+
+    return true;
+
+  }
+  GKG_CATCH( "bool gkg::AGlobalTractographyObject::boundingBox( "
+             "Point3df& lowerCorner,"
+             "Point3df& upperCorner ) const" );
+
+}
+
+
+void gkg::AGlobalTractographyObject::update()
+{
+
+  try
+  {
+
+    std::cout << "start of "
+              << "gkg::AGlobalTractographyObject::"
+              << "update()"
+              << std::endl;
+
+    this->clear();
+
+    this->setSpinGlassExtremities();
+    this->setSpinGlassShaderColorValues();
+
+    this->setSpinGlassConnectionExtremities();
+    this->setSpinGlassConnectionShaderColorValues();
+
+    std::cout << "end of "
+              << "gkg::AGlobalTractographyObject::"
+              << "update()"
+              << std::endl;
+
+  }
+  GKG_CATCH( "void gkg::AGlobalTractographyObject::update()" );
+
+}
+
+/*
+bool gkg::AGlobalTractographyObject::render(
+                                         anatomist::PrimList& primitiveList,
+                                         const anatomist::ViewState& viewState )
+{
+
+  try
+  {
+
+    std::cout << "start of "
+              << "gkg::AGlobalTractographyObject::"
+              << "render()"
+              << std::endl;
+
+    if ( !_qGLSpinGlassShader )
+    {
+
+      this->setSpinGlassShaderCode();
+      this->setSpinGlassShaderAttributes();
+
+    }
+
+    if ( !_qGLSpinGlassConnectionShader )
+    {
+
+      this->setSpinGlassConnectionShaderCode();
+      this->setSpinGlassConnectionShaderAttributes();
+
+    }
+
+    //if ( _qGLSpinGlassShader || _qGLSpinGlassConnectionShader )
+    {
+
+      GLComponent* glComponent = GLComponent::glAPI();
+      glComponent->glSetChanged( glBODY );
+
+    }
+
+    if ( _qGLSpinGlassShader )
+    {
+
+      if ( !_glSpinGlassList->item() )
+      {
+
+        _glSpinGlassList->generate();
+
+      }
+
+    }
+
+    if ( _qGLSpinGlassConnectionShader )
+    {
+
+      if ( !_glSpinGlassConnectionList->item() )
+      {
+
+        _glSpinGlassConnectionList->generate();
+
+      }
+
+    }
+
+    std::cout << "end of "
+              << "gkg::AGlobalTractographyObject::"
+              << "render()"
+              << std::endl;
+
+    return anatomist::AObject::render( primitiveList, viewState );
+
+  }
+  GKG_CATCH( "bool gkg::AGlobalTractographyObject::render( "
+             "anatomist::PrimList& primitiveList, "
+             "const anatomist::ViewState& viewState )" );
+
+}
+*/
+
+
+bool gkg::AGlobalTractographyObject::glMakeBodyGLL(
+                                         const anatomist::ViewState& viewState,
+                                         const anatomist::GLList& glList ) const
+{
+
+  try
+  {
+
+    std::cout << "start of "
+              << "gkg::AGlobalTractographyObject::"
+              << "glMakeBodyGLL()"
+              << std::endl;
+
+    glNewList( glList.item(), GL_COMPILE );
+
+
+
+    //glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    glDisable(GL_LIGHTING);
+    glColorMaterial ( GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE );
+    glEnable ( GL_COLOR_MATERIAL );
+    //glLightModelf( GL_LIGHT_MODEL_TWO_SIDE, 1.0 );
+
+    glBegin( GL_LINES );
+
+
+    int32_t validSpinGlassCount = _spinGlassAndConnectionMap->
+                                                       getValidSpinGlassCount();
+
+    float offsetX = ( MaxX2D() + MinX2D() ) / 2.0;
+    float offsetY = ( MaxY2D() + MinY2D() ) / 2.0;
+    float offsetZ = ( MaxZ2D() + MinZ2D() ) / 2.0;
+
+
+    std::cout << "xmin, xmax = " << MinX2D() << ", " << MaxX2D() << std::endl;
+    std::cout << "ymin, ymax = " << MinY2D() << ", " << MaxY2D() << std::endl;
+    std::cout << "zmin, zmax = " << MinZ2D() << ", " << MaxZ2D() << std::endl;
+
+    std::cout << "--------------->validSpinGlassCount=" << validSpinGlassCount
+              << std::endl;
+
+    if ( validSpinGlassCount )
+    {
+    
+      std::list< gkg::RCPointer< gkg::SpinGlass > > spinGlasses;
+      _spinGlassAndConnectionMap->getValidSpinGlasses( spinGlasses );
+
+      std::list< gkg::RCPointer< gkg::SpinGlass > >::const_iterator
+        s = spinGlasses.begin();
+      uint32_t i = 0;
+
+
+      for ( i = 0; i < validSpinGlassCount; i++, s++ )
+      {
+
+        const gkg::Vector3d< float >& color = ( *s )->getOrientation();
+
+        glColor3f( std::fabs( color.x ),
+                   std::fabs( color.y ),
+                   std::fabs( color.z ) );
+                        
+
+        // setting the backward extremity of the spin glass
+        const gkg::Vector3d< float >& backwardExtremity = 
+                     ( *s )->getExtremity( gkg::SpinGlass::Backward );
+        glVertex3f( backwardExtremity.x,// - offsetX,
+                    backwardExtremity.y,// - offsetY,
+                    backwardExtremity.z );//- offsetZ );
+
+        glColor3f( std::fabs( color.x ),
+                   std::fabs( color.y ),
+                   std::fabs( color.z ) );
+ 
+        // setting the forward extremity of the spin glass
+        const gkg::Vector3d< float >& forwardExtremity = 
+                     ( *s )->getExtremity( gkg::SpinGlass::Forward );
+        glVertex3f( forwardExtremity.x,// - offsetX,
+                    forwardExtremity.y,// - offsetY,
+                    forwardExtremity.z );//- offsetZ );
+
+      }
+
+    }
+
+        glColor3f( 0.3,
+                    0.3,
+                    0.3 );
+      glVertex3f( MinX2D() - offsetX, MinY2D() - offsetY, MinZ2D() - offsetZ );
+      glVertex3f( MaxX2D() - offsetX, MinY2D() - offsetY, MinZ2D() - offsetZ );
+
+      glVertex3f( MinX2D() - offsetX, MaxY2D() - offsetY, MinZ2D() - offsetZ );
+      glVertex3f( MaxX2D() - offsetX, MaxY2D() - offsetY, MinZ2D() - offsetZ );
+
+      glVertex3f( MinX2D() - offsetX, MinY2D() - offsetY, MinZ2D() - offsetZ );
+      glVertex3f( MinX2D() - offsetX, MaxY2D() - offsetY, MinZ2D() - offsetZ );
+
+      glVertex3f( MaxX2D() - offsetX, MinY2D() - offsetY, MinZ2D() - offsetZ );
+      glVertex3f( MaxX2D() - offsetX, MaxY2D() - offsetY, MinZ2D() - offsetZ );
+
+      glVertex3f( MinX2D() - offsetX, MinY2D() - offsetY, MaxZ2D() - offsetZ );
+      glVertex3f( MaxX2D() - offsetX, MinY2D() - offsetY, MaxZ2D() - offsetZ );
+
+      glVertex3f( MinX2D() - offsetX, MaxY2D() - offsetY, MaxZ2D() - offsetZ );
+      glVertex3f( MaxX2D() - offsetX, MaxY2D() - offsetY, MaxZ2D() - offsetZ );
+
+      glVertex3f( MinX2D() - offsetX, MinY2D() - offsetY, MaxZ2D() - offsetZ );
+      glVertex3f( MinX2D() - offsetX, MaxY2D() - offsetY, MaxZ2D() - offsetZ );
+
+      glVertex3f( MaxX2D() - offsetX, MinY2D() - offsetY, MaxZ2D() - offsetZ );
+      glVertex3f( MaxX2D() - offsetX, MaxY2D() - offsetY, MaxZ2D() - offsetZ );
+
+      glVertex3f( MinX2D() - offsetX, MinY2D() - offsetY, MinZ2D() - offsetZ );
+      glVertex3f( MinX2D() - offsetX, MinY2D() - offsetY, MaxZ2D() - offsetZ );
+
+      glVertex3f( MinX2D() - offsetX, MaxY2D() - offsetY, MinZ2D() - offsetZ );
+      glVertex3f( MinX2D() - offsetX, MaxY2D() - offsetY, MaxZ2D() - offsetZ );
+
+      glVertex3f( MaxX2D() - offsetX, MinY2D() - offsetY, MinZ2D() - offsetZ );
+      glVertex3f( MaxX2D() - offsetX, MinY2D() - offsetY, MaxZ2D() - offsetZ );
+
+      glVertex3f( MaxX2D() - offsetX, MaxY2D() - offsetY, MinZ2D() - offsetZ );
+      glVertex3f( MaxX2D() - offsetX, MaxY2D() - offsetY, MaxZ2D() - offsetZ );
+
+
+    glEnd();
+
+
+
+
+
+    glEndList();
+
+/*
+    ////////////////////////////////////////////////////////////////////////////
+    // making a vector of indices (using vertices)
+    ////////////////////////////////////////////////////////////////////////////
+
+    int32_t validSpinGlassCount =
+                           _spinGlassAndConnectionMap->getValidSpinGlassCount();
+    int32_t spinGlassVertexCount = 0;
+    if ( validSpinGlassCount )
+    {
+
+      glNewList( _glSpinGlassList->item(), GL_COMPILE );
+    
+      glBegin( GL_LINES );
+
+      spinGlassVertexCount = 2 * validSpinGlassCount;
+
+      int32_t sv = 0;
+      for ( sv = 0; sv < spinGlassVertexCount; sv++ )
+      {
+
+        glVertex3d( sv, 0, 0 );
+
+      }
+
+      glEnd();
+      glEndList();
+
+    }
+
+    ////////////////////////////////////////////////////////////////////////////
+    // making a vector of indices (using vertices
+    ////////////////////////////////////////////////////////////////////////////
+
+    int32_t validSpinGlassConnectionCount = 
+                 _spinGlassAndConnectionMap->getValidSpinGlassConnectionCount();
+    int32_t spinGlassConnectionVertexCount = 0;
+    if ( validSpinGlassConnectionCount )
+    {
+
+      glNewList( _glSpinGlassConnectionList->item(), GL_COMPILE );
+    
+      glBegin( GL_LINES );
+
+      spinGlassConnectionVertexCount = 2 * validSpinGlassConnectionCount;
+
+      int32_t cv = 0;
+      for ( cv = 0; cv < spinGlassConnectionVertexCount; cv++ )
+      {
+
+        glVertex3d( cv, 0, 0 );
+
+      }
+
+      glEnd();
+      glEndList();
+
+    }
+
+    ////////////////////////////////////////////////////////////////////////////
+    // making vertices for spin glasses and connections
+    ////////////////////////////////////////////////////////////////////////////
+
+    if ( validSpinGlassCount || validSpinGlassConnectionCount )
+    {
+
+      glNewList( glList.item(), GL_COMPILE );
+
+    }
+
+    if ( validSpinGlassCount && _qGLSpinGlassShaderProgram )
+    {
+
+      if ( _qGLSpinGlassShaderProgram->bind() )
+      {
+
+        // setting uniform values
+        _qGLSpinGlassShaderProgram->setUniformValue(
+                                              _uniformIsShaderedSpinGlassObject,
+                                              1 );
+
+        int32_t v = 0;
+        for ( v = 0; v < spinGlassVertexCount; v++ )
+        {
+
+          _qGLSpinGlassShaderProgram->setUniformValueArray(
+                                           _uniformLocationSpinGlassColorValues,
+  				           _spinGlassColorValues[ v ],
+                                           spinGlassVertexCount );
+
+          _qGLSpinGlassShaderProgram->setUniformValueArray(
+                                           _uniformLocationSpinGlassExtremities,
+  				           _spinGlassExtremities[ v ],
+  				           spinGlassVertexCount );
+
+          // calling the list
+          _glSpinGlassList->callList();
+
+        }
+
+        // setting back the uniform shadered option
+        _qGLSpinGlassShaderProgram->setUniformValue(
+                                              _uniformIsShaderedSpinGlassObject,
+                                              0 );
+
+        // releasing the shader programs
+        _qGLSpinGlassShaderProgram->release();
+
+      }
+
+    }
+
+    if ( validSpinGlassConnectionCount && _qGLSpinGlassConnectionShaderProgram )
+    {
+
+      if ( _qGLSpinGlassConnectionShaderProgram->bind() )
+      {
+
+        // setting uniform values
+        _qGLSpinGlassConnectionShaderProgram->setUniformValue(
+                                    _uniformIsShaderedSpinGlassConnectionObject,
+                                    1 );
+
+        int32_t v = 0;
+        for ( v = 0; v < spinGlassVertexCount; v++ )
+        {
+
+          _qGLSpinGlassConnectionShaderProgram->setUniformValueArray(
+                                 _uniformLocationSpinGlassConnectionColorValues,
+  				 _spinGlassConnectionColorValues[ v ],
+  				 spinGlassConnectionVertexCount );
+
+          _qGLSpinGlassConnectionShaderProgram->setUniformValueArray(
+                                 _uniformLocationSpinGlassConnectionExtremities,
+  				 _spinGlassConnectionExtremities[ v ],
+  				 spinGlassConnectionVertexCount );
+
+          // calling the list
+          _glSpinGlassConnectionList->callList();
+
+        }
+
+        // setting back the uniform shadered option
+        _qGLSpinGlassConnectionShaderProgram->setUniformValue(
+                                    _uniformIsShaderedSpinGlassConnectionObject,
+                                    0 );
+
+        // releasing the shader programs
+        _qGLSpinGlassConnectionShaderProgram->release();
+
+      }
+
+    }
+
+    if ( validSpinGlassCount || validSpinGlassConnectionCount )
+    {
+
+      glEndList();
+
+    }
+*/
+    std::cout << "end of "
+              << "gkg::AGlobalTractographyObject::"
+              << "glMakeBodyGLL()"
+              << std::endl;
+
+    return true;
+
+  }
+  GKG_CATCH( "bool gkg::AGlobalTractographyObject::glMakeBodyGLL( "
+             "const anatomist::ViewState& viewState, "
+             "const anatomist::GLList& glList ) const" );
+
+}
+
+
+int32_t gkg::AGlobalTractographyObject::registerClass()
+{
+
+  try
+  {
+
+    _classType = registerObjectType( "GlobalTractography" );
+
+    std::cout << "GlobalTractography registered : " << _classType << std::endl;
+
+    return _classType;
+
+  }
+  GKG_CATCH( "int32_t gkg::AGlobalTractographyObject::registerClass()" );
+
+}
+
+
+int32_t gkg::AGlobalTractographyObject::getClassType()
+{
+
+  try
+  {
+
+    return _classType;
+
+  }
+  GKG_CATCH( "int32_t gkg::AGlobalTractographyObject::getClassType()" );
+
+}
+
+
+void gkg::AGlobalTractographyObject::clear()
+{
+
+  try
+  {
+    std::cout << "start of gkg::AGlobalTractographyObject::clear()"
+              << std::endl;
+
+    uint32_t i = 0;
+
+    // deleting spin glass extremities
+    for ( i = 0; i < _spinGlassExtremities.size(); i++ )
+    {
+
+      if ( _spinGlassExtremities[ i ] )
+      {
+
+        delete [] _spinGlassExtremities[ i ];
+
+      }
+
+    }
+    _spinGlassExtremities.clear();
+
+    // deleting spin glass color values
+    for ( i = 0; i < _spinGlassColorValues.size(); ++i )
+    {
+
+      if ( _spinGlassColorValues[ i ] )
+      {
+
+        delete [] _spinGlassColorValues[ i ];
+
+      }
+
+    }
+    _spinGlassColorValues.clear();
+
+    // deleting spin glass connection extremities
+    for ( i = 0; i < _spinGlassConnectionExtremities.size(); i++ )
+    {
+
+      if ( _spinGlassConnectionExtremities[ i ] )
+      {
+
+        delete [] _spinGlassConnectionExtremities[ i ];
+
+      }
+
+    }
+    _spinGlassConnectionExtremities.clear();
+
+    // deleting spin glass connection color values
+    for ( i = 0; i < _spinGlassConnectionColorValues.size(); ++i )
+    {
+
+      if ( _spinGlassConnectionColorValues[ i ] )
+      {
+
+        delete [] _spinGlassConnectionColorValues[ i ];
+
+      }
+
+    }
+    _spinGlassConnectionColorValues.clear();
+
+    std::cout << "end of gkg::AGlobalTractographyObject::clear()"
+              << std::endl;
+
+  }
+  GKG_CATCH( "void gkg::AGlobalTractographyObject::clear()" );
+
+}
+
+
+void gkg::AGlobalTractographyObject::setSpinGlassShaderCode()
+{
+
+  try
+  {
+
+    std::cout << "start of "
+              << "gkg::AGlobalTractographyObject::"
+              << "setSpinGlassShaderCode()"
+              << std::endl;
+
+    if ( _qGLSpinGlassShader )
+    {
+
+      delete _qGLSpinGlassShader;
+      delete _qGLSpinGlassShaderProgram;
+
+    }
+
+    int32_t 
+     validSpinGlassCount = _spinGlassAndConnectionMap->getValidSpinGlassCount();
+
+    std::cout << "---------->validSpinGlassCount="
+              << validSpinGlassCount
+              << std::endl;
+
+    if ( validSpinGlassCount )
+    {
+
+      std::cout << "etape 1" << std::endl;
+
+      _qGLSpinGlassShader = new QGLShader( QGLShader::Vertex );
+
+      std::cout << "etape 2" << std::endl;
+
+      _qGLSpinGlassShader->compileSourceCode(
+        gkg::shaderCodeSpinGlass( gkg::StringConverter::toString(
+                                             validSpinGlassCount ) ).c_str()
+                                            );
+
+      std::cout << gkg::shaderCodeSpinGlass( gkg::StringConverter::toString(
+                                             validSpinGlassCount ) )
+                << std::endl;
+      std::cout << "etape 3" << std::endl;
+
+      _qGLSpinGlassShaderProgram = new QGLShaderProgram();
+
+      std::cout << "etape 4" << std::endl;
+
+      _qGLSpinGlassShaderProgram->addShader( _qGLSpinGlassShader );
+
+      std::cout << "etape 5" << std::endl;
+
+      _qGLSpinGlassShaderProgram->link();
+
+      std::cout << "etape 6" << std::endl;
+
+    }
+    else
+    {
+
+      _qGLSpinGlassShader = 0;
+      _qGLSpinGlassShaderProgram = 0;
+
+    }
+
+    std::cout << "end of "
+              << "gkg::AGlobalTractographyObject::"
+              << "setSpinGlassShaderCode()"
+              << std::endl;
+
+  }
+  GKG_CATCH( "void gkg::AGlobalTractographyObject::setSpinGlassShaderCode()" );
+
+}
+
+
+void gkg::AGlobalTractographyObject::setSpinGlassShaderAttributes()
+{
+
+  try
+  {
+
+    std::cout << "start of "
+              << "gkg::AGlobalTractographyObject::"
+              << "setSpinGlassShaderAttributes()"
+              << std::endl;
+
+    if ( _qGLSpinGlassShaderProgram )
+    {
+
+      _qGLSpinGlassShaderProgram->bind();
+
+      _uniformIsShaderedSpinGlassObject = _qGLSpinGlassShaderProgram->
+                                 uniformLocation( "isShaderedSpinGlassObject" );
+      _uniformLocationSpinGlassExtremities = _qGLSpinGlassShaderProgram->
+                                 uniformLocation( "spinGlassExtremities" );
+      _uniformLocationSpinGlassColorValues = _qGLSpinGlassShaderProgram->
+                                 uniformLocation( "spinGlassColorValues" );
+
+      _qGLSpinGlassShaderProgram->release();
+
+      if ( _glSpinGlassList )
+      {
+
+        delete _glSpinGlassList;
+
+      }
+    
+      _glSpinGlassList = new anatomist::GLList();
+
+    }
+    else
+    {
+
+      _glSpinGlassList = new anatomist::GLList();
+
+    }
+
+
+    std::cout << "end of "
+              << "gkg::AGlobalTractographyObject::"
+              << "setSpinGlassShaderAttributes()"
+              << std::endl;
+
+  }
+  GKG_CATCH( "void "
+             "gkg::AGlobalTractographyObject::setSpinGlassShaderAttributes()" );
+
+}
+
+
+void gkg::AGlobalTractographyObject::setSpinGlassExtremities()
+{
+
+  try
+  {
+
+    std::cout << "start of "
+              << "gkg::AGlobalTractographyObject::"
+              << "setSpinGlassExtremities()"
+              << std::endl;
+
+    int32_t validSpinGlassCount = _spinGlassAndConnectionMap->
+                                                       getValidSpinGlassCount();
+
+
+    std::cout << "--------------->validSpinGlassCount=" << validSpinGlassCount
+              << std::endl;
+
+    if ( validSpinGlassCount )
+    {
+
+      std::list< gkg::RCPointer< gkg::SpinGlass > > spinGlasses;
+      _spinGlassAndConnectionMap->getValidSpinGlasses( spinGlasses );
+
+      _spinGlassExtremities.resize( 2 * validSpinGlassCount );
+
+      std::list< gkg::RCPointer< gkg::SpinGlass > >::const_iterator
+        s = spinGlasses.begin();
+      uint32_t i = 0;
+      for ( i = 0; i < validSpinGlassCount; i++, s++ )
+      {
+
+        // setting the backward extremity of the spin glass
+        const gkg::Vector3d< float >& backwardExtremity = 
+                     ( *s )->getExtremity( gkg::SpinGlass::Backward );
+        _spinGlassExtremities[ 2 * i ] = new QVector3D( backwardExtremity.x,
+                                                        backwardExtremity.y,
+                                                        backwardExtremity.z );
+
+        // setting the forward extremity of the spin glass
+        const gkg::Vector3d< float >& forwardExtremity = 
+                     ( *s )->getExtremity( gkg::SpinGlass::Forward );
+        _spinGlassExtremities[ 2 * i + 1 ] = new QVector3D(
+                                                           forwardExtremity.x,
+                                                           forwardExtremity.y,
+                                                           forwardExtremity.z );
+
+      }
+
+    }
+
+    std::cout << "end of "
+              << "gkg::AGlobalTractographyObject::"
+              << "setSpinGlassExtremities()"
+              << std::endl;
+
+  }
+  GKG_CATCH( "void gkg::AGlobalTractographyObject::setSpinGlassExtremities()" );
+
+}
+
+
+void gkg::AGlobalTractographyObject::setSpinGlassShaderColorValues()
+{
+
+  try
+  {
+
+    std::cout << "start of "
+              << "gkg::AGlobalTractographyObject::"
+              << "setSpinGlassShaderColorValues()"
+              << std::endl;
+
+    int32_t validSpinGlassCount = _spinGlassAndConnectionMap->
+                                                       getValidSpinGlassCount();
+
+    if ( validSpinGlassCount )
+    {
+
+      _spinGlassColorValues.resize( 2U * validSpinGlassCount );
+
+      uint32_t i = 0;
+      for ( i = 0; i < _spinGlassColorValues.size(); i++ )
+      {
+
+        _spinGlassColorValues[ i ] = new QVector3D( 0.000, 0.000, 0.128 );
+
+      }
+
+    }
+
+    std::cout << "end of "
+              << "gkg::AGlobalTractographyObject::"
+              << "setSpinGlassShaderColorValues()"
+              << std::endl;
+
+  }
+  GKG_CATCH( "void gkg::AGlobalTractographyObject::"
+             "setSpinGlassShaderColorValues()" );
+
+}
+
+
+void gkg::AGlobalTractographyObject::setSpinGlassConnectionShaderCode()
+{
+
+  try
+  {
+
+    std::cout << "start of "
+              << "gkg::AGlobalTractographyObject::"
+              << "setSpinGlassConnectionShaderCode()"
+              << std::endl;
+
+    if ( _qGLSpinGlassConnectionShader )
+    {
+
+      delete _qGLSpinGlassConnectionShader;
+      delete _qGLSpinGlassConnectionShaderProgram;
+
+    }
+
+    int32_t validSpinGlassConnectionCount = _spinGlassAndConnectionMap->
+                                             getValidSpinGlassConnectionCount();
+
+    if ( validSpinGlassConnectionCount )
+    {
+
+      _qGLSpinGlassConnectionShader = new QGLShader( QGLShader::Vertex );
+
+      _qGLSpinGlassConnectionShader->compileSourceCode(
+        gkg::shaderCodeSpinGlassConnection(
+          gkg::StringConverter::toString( validSpinGlassConnectionCount )
+                                         ).c_str()
+                                                      );
+
+      _qGLSpinGlassConnectionShaderProgram = new QGLShaderProgram();
+      _qGLSpinGlassConnectionShaderProgram->addShader(
+                                                _qGLSpinGlassConnectionShader );
+      _qGLSpinGlassConnectionShaderProgram->link();
+
+    }
+    else
+    {
+
+      _qGLSpinGlassConnectionShader = 0;
+      _qGLSpinGlassConnectionShaderProgram = 0;
+
+    }
+
+    std::cout << "end of "
+              << "gkg::AGlobalTractographyObject::"
+              << "setSpinGlassConnectionShaderCode()"
+              << std::endl;
+
+  }
+  GKG_CATCH( "void gkg::AGlobalTractographyObject::"
+             "setSpinGlassConnectionShaderCode()" );
+
+}
+
+
+void gkg::AGlobalTractographyObject::setSpinGlassConnectionShaderAttributes()
+{
+
+  try
+  {
+
+    std::cout << "start of "
+              << "gkg::AGlobalTractographyObject::"
+              << "setSpinGlassConnectionShaderAttributes()"
+              << std::endl;
+
+    if ( _qGLSpinGlassConnectionShaderProgram )
+    {
+
+      _qGLSpinGlassConnectionShaderProgram->bind();
+
+      _uniformIsShaderedSpinGlassConnectionObject =
+      _qGLSpinGlassConnectionShaderProgram->uniformLocation( 
+                                        "isShaderedSpinGlassConnectionObject" );
+      _uniformLocationSpinGlassConnectionExtremities =
+      _qGLSpinGlassConnectionShaderProgram->uniformLocation(
+                                             "spinGlassConnectionExtremities" );
+      _uniformLocationSpinGlassConnectionColorValues =
+      _qGLSpinGlassConnectionShaderProgram->uniformLocation(
+                                             "spinGlassConnectionColorValues" );
+
+      _qGLSpinGlassConnectionShaderProgram->release();
+
+      if ( _glSpinGlassConnectionList )
+      {
+
+        delete _glSpinGlassConnectionList;
+
+      }
+    
+      _glSpinGlassConnectionList = new anatomist::GLList();
+
+    }
+    else
+    {
+
+      _glSpinGlassConnectionList = new anatomist::GLList();
+
+    }
+
+    std::cout << "end of "
+              << "gkg::AGlobalTractographyObject::"
+              << "setSpinGlassConnectionShaderAttributes()"
+              << std::endl;
+
+  }
+  GKG_CATCH( "void gkg::AGlobalTractographyObject::"
+             "setSpinGlassConnectionShaderAttributes()" );
+
+}
+
+
+void gkg::AGlobalTractographyObject::setSpinGlassConnectionExtremities()
+{
+
+  try
+  {
+
+    std::cout << "start of "
+              << "gkg::AGlobalTractographyObject::"
+              << "setSpinGlassConnectionExtremities()"
+              << std::endl;
+
+    int32_t validSpinGlassConnectionCount = _spinGlassAndConnectionMap->
+                                             getValidSpinGlassConnectionCount();
+
+    if ( validSpinGlassConnectionCount )
+    {
+
+      std::list< gkg::RCPointer< gkg::SpinGlassConnection > >
+        spinGlassConnections;
+      _spinGlassAndConnectionMap->getValidSpinGlassConnections(
+                                                         spinGlassConnections );
+
+      _spinGlassConnectionExtremities.resize( 2 *
+                                              validSpinGlassConnectionCount );
+
+      std::list< gkg::RCPointer< gkg::SpinGlassConnection > >::const_iterator
+        c = spinGlassConnections.begin();
+      uint32_t i = 0;
+      for ( i = 0; i < validSpinGlassConnectionCount; i++, c++ )
+      {
+
+        // setting the first extremity of the spin glass connection
+        const gkg::Vector3d< float >& firstExtremity = 
+                                                    ( *c )->getFirstExtremity();
+        _spinGlassExtremities[ 2 * i ] = new QVector3D( firstExtremity.x,
+                                                        firstExtremity.y,
+                                                        firstExtremity.z );
+
+        // setting the second extremity of the spin glass connection
+        const gkg::Vector3d< float >& secondExtremity = 
+                                                   ( *c )->getSecondExtremity();
+        _spinGlassExtremities[ 2 * i + 1 ] = new QVector3D( secondExtremity.x,
+                                                            secondExtremity.y,
+                                                            secondExtremity.z );
+
+      }
+
+    }
+
+    std::cout << "end of "
+              << "gkg::AGlobalTractographyObject::"
+              << "setSpinGlassConnectionExtremities()"
+              << std::endl;
+
+  }
+  GKG_CATCH( "void gkg::AGlobalTractographyObject::"
+             "setSpinGlassConnectionExtremities()" );
+
+}
+
+
+void gkg::AGlobalTractographyObject::setSpinGlassConnectionShaderColorValues()
+{
+
+  try
+  {
+
+    std::cout << "start of "
+              << "gkg::AGlobalTractographyObject::"
+              << "setSpinGlassConnectionShaderColorValues()"
+              << std::endl;
+
+    int32_t validSpinGlassConnectionCount = _spinGlassAndConnectionMap->
+                                             getValidSpinGlassConnectionCount();
+
+    if ( validSpinGlassConnectionCount )
+    {
+
+      _spinGlassConnectionColorValues.resize( 2U *
+                                              validSpinGlassConnectionCount );
+
+      uint32_t i = 0;
+      for ( i = 0; i < _spinGlassConnectionColorValues.size(); i++ )
+      {
+
+        _spinGlassConnectionColorValues[ i ] =
+                                              new QVector3D( 0.19, 0.19, 0.19 );
+
+      }
+
+    }
+
+    std::cout << "end of "
+              << "gkg::AGlobalTractographyObject::"
+              << "setSpinGlassConnectionShaderColorValues()"
+              << std::endl;
+
+  }
+  GKG_CATCH( "void gkg::AGlobalTractographyObject::"
+             "setSpinGlassConnectionShaderColorValues()" );
+
+}
+

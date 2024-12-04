@@ -1,0 +1,4 @@
+#! /bin/bash
+
+mpirun -v -display-allocation -np 16 -mca plm_rsh_agent rsh:ssh -machinefile ~/mpiTest/scripts/machines.txt GkgExecuteCommand MpiTest
+

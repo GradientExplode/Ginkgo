@@ -1,0 +1,64 @@
+liste des dependences sous ubuntu-16.04LTS:
+===========================================
+libdcmtk-dev
+libnifti-dev
+libvtk5-dev
+libgsl-dev
+libsvm-dev
+python-matplotlib
+python-numpy
+python-scipy
+python-opengl
+python-qt4
+python-qt4-gl
+python-poppler
+python-poppler-qt4
+liblapack-dev
+libopenjpeg-dev
+libminc-dev
+libqwt-dev
+libatlas-base-dev
+libhpdf-dev
+
+
+
+requis pour les packs deb de brainvisa:
+---------------------------------------
+
+libopenslide-dev
+libblitz0-dev
+libjpeg62-dev
+libsigc++-2.0-dev
+libboost-dev
+python-sip-dev
+python-qt4-dev
+libqwt5-qt4-dev
+
+
+packs deb de BRAINVISA a installer:
+===================================
+soma-base-4.7.0-Ubuntu-16.04-amd64.deb
+soma-base-dev-4.7.0-Ubuntu-16.04-amd64.deb
+soma-io-4.7.0-Ubuntu-16.04-amd64.deb
+soma-io-dev-4.7.0-Ubuntu-16.04-amd64.deb
+aims-free-4.7.0-Ubuntu-16.04-amd64.deb
+aims-free-dev-4.7.0-Ubuntu-16.04-amd64.deb
+brainvisa-share-4.7.0-Ubuntu-16.04-amd64.deb
+anatomist-free-4.7.0-Ubuntu-16.04-amd64.deb
+anatomist-free-dev-4.7.0-Ubuntu-16.04-amd64.deb
+anatomist-gpl-4.7.0-Ubuntu-16.04-amd64.deb
+anatomist-gpl-dev-4.7.0-Ubuntu-16.04-amd64.deb
+
+
+packs deb de F. Poupon a installer:
+===================================
+libpthread++_1.5.0_amd64-runtime.deb
+libpthread++_1.5.0_amd64-devel.deb
+
+libpio_3.2.0_amd64-runtime.deb
+libpio_3.2.0_amd64-devel.deb
+
+packs deb de C. Poupon a installer:
+===================================
+gkg_7.0.0_amd64-runtime.deb
+gkg_7.0.0_amd64-devel.deb

@@ -1,0 +1,102 @@
+#!/bin/bash
+
+. /etc/rc.d/init.d/functions
+
+GKG_ROOT_PATH="/usr/local/GKG-FedoraCore5-3.7"
+GKG_SHARE_PATH="${GKG_ROOT_PATH}/share"
+GKG_ETC_PATH="/etc"
+
+DCMDICTPATH="${GKG_SHARE_PATH}/gkg-3.7/dicom/public-dicom.dic:${GKG_SHARE_PATH}/gkg-3.7/dicom/gehc-private-dicom.dic:${GKG_SHARE_PATH}/gkg-3.7/dicom/siemens-private-dicom.dic"
+
+PATH="${GKG_ROOT_PATH}/bin/command-lines:${PATH}"
+LD_LIBRARY_PATH="${GKG_ROOT_PATH}/lib:${LD_LIBRARY_PATH}"
+
+export GKG_ROOT_PATH \
+       GKG_SHARE_PATH \
+       GKG_ETC_PATH \
+       DCMDICTPATH \
+       PATH \
+       LD_LIBRARY_PATH 
+
+RETVAL=0
+
+daemon="GkgDicomStorageUnitd"
+program="GkgTestDicomStorageUnit"
+
+start()
+{
+
+  if [ -r ${GKG_ETC_PATH}/$daemon.conf ]; then
+
+    echo -n $"Starting $daemon: "
+    $program -daemon ${GKG_ETC_PATH}/$daemon.conf \
+             -verbosePluginLoading false&
+    RETVAL=$?
+    [ $RETVAL -eq 0 ] && {
+      touch /var/lock/subsys/$daemon
+      success $"$daemon $site" 
+    } 
+    echo
+
+  fi
+
+  return $RETVAL
+
+}
+
+
+stop()
+{
+
+  echo -n $"Shutting down $daemon: "
+  killproc $program
+  RETVAL=$?
+  echo
+  [ $RETVAL -eq 0 ] && rm -f /var/lock/subsys/$daemon
+  return $RETVAL
+
+}
+
+# See how we were called.
+case "$1" in
+
+  start)
+
+    start
+    ;;
+
+  stop)
+
+    stop
+    ;;
+
+  restart|reload)
+
+    stop
+    start
+    RETVAL=$?
+    ;;
+
+  condrestart)
+
+    if [ -f /var/lock/subsys/$daemon ]; then
+      stop
+      start
+      RETVAL=$?
+    fi
+    ;;
+
+  status)
+
+    status $daemon
+    RETVAL=$?
+    ;;
+
+  *)
+
+    echo $"Usage: $0 {start|stop|restart|condrestart|status}"
+    exit 1
+
+esac
+
+exit $RETVAL

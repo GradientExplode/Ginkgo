@@ -1,0 +1,68 @@
+1) How to find installed packages on a distribution ?
+
+sudo dpkg --get-selections > installed_packages.txt
+
+--------------------------------------------------------------------------------
+
+2) How to install deb packages from an installed_packages.txt ?
+
+sudo dpkg --set-selections < installed_packages.txt
+sudo apt-get -u dselect-upgrad
+
+--------------------------------------------------------------------------------
+
+3)  How to check memory leaks using valgrind ?
+
+valgrind --tool=memcheck \
+         --num-callers=20 \
+         --leak-check=full \
+         --show-reachable=yes
+         nom_du_programme
+
+--------------------------------------------------------------------------------
+
+4) Things required in the .bashrc to have GKG working properly with
+   BrainVISA, DTI-TK and FREESURFER for standard users ?
+
+
+#################################### BRAINVISA #################################
+
+export PATH=<brainvisa_installation_directory>/brainvisa-4.6.0/bin:$PATH
+
+
+################################## DTI-TK ######################################
+
+export PATH=/usr/local/dtitk/bin:$PATH
+export PATH=/usr/local/dtitk/scripts:$PATH
+export DTITK_ROOT=/usr/local/dtitk
+
+################################## FREESURFER ##################################
+
+export FREESURFER_HOME=/usr/local/freesurfer
+export PATH=$FREESURFER_HOME/bin:$PATH
+
+source $FREESURFER_HOME/SetUpFreeSurfer.sh
+
+
+--------------------------------------------------------------------------------
+
+4) Things required in the .bashrc for GKG moderators ?
+
+#################################### GKG #######################################
+
+
+# Local SVN client and account
+export GKG_SVN=$VOLATILE_HOME/Subversion
+export GKG_SVNUSER=cpoupon
+
+gkgco() {
+  mkdir gkg
+  svn --username ${GKG_SVNUSER} checkout svn+ssh://82.243.222.187/home/svn/repository/gkg gkg
+}
+
+
+# Aliases
+alias cds='cd ${GKG_SVN}; echo ${GKG_SVN}'
+alias cdp='cd ${GKG_SVN}/gkg; echo ${GKG_SVN}/gkg'
+alias cdb='cd ${GKG_SVN}/build-gkg-7.0; echo ${GKG_SVN}/build-gkg-7.0'
+

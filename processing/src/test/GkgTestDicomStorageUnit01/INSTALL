@@ -1,0 +1,19 @@
+                   - INSTALLATION GKGDICOMSTORAGEUNIT DAEMON -
+                   ===========================================
+
+1) Login as root
+
+2) Install package in /usr/local directory
+
+3) Copy file GkgDicomStorageUnitd.conf file in /etc directory
+
+4) Copy file GkgDicomStorageUnitd file in /etc/init.d directory and check
+   it is executable
+
+5) Go to directory /etc/rc5.d
+     cd /etc/rc5d
+
+6) Make the link:
+     ln -s ../init.d/GkgDicomStorageUnitd S98GkgDicomStorageUnitd
+
+

@@ -1,0 +1,5 @@
+add_subdirectory( GkgTestLargeFileStream01 )
+add_subdirectory( GkgTestObject01 )
+add_subdirectory( GkgTestRCPointer01 )
+add_subdirectory( GkgTestRCPointer02 )
+add_subdirectory( GkgTestStringConverter01 )

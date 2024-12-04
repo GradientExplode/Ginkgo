@@ -1,0 +1,73 @@
+attributes = {
+  'mesh_cylinder' : {
+    'type' : 'cylinder',
+    'parameters' : {
+      'center' : [ -3.0, 2.0, 3.0 ],
+      'axis' : [ 1.0, 0.0, 0.0 ],
+      'length' : 1.5,
+      'radius1' : 1.5,
+      'radius2' : 3.5,
+      'facet_count' : 20,
+      'closed' : 1,
+      'random_rotation' : 1
+    }
+  },
+
+  'mesh_fiber' : {
+    'type' : 'fiber',
+    'parameters' : {
+      'points' : [ [ 1.0, 2.0, 3.0 ], [ 3, 2.0, 3.0 ], [ 6.0, 2.0, 3.0 ] ],
+      'radii' : [ 1.0, 0.8, 1.2 ],
+      'vertex_count_per_plane' : 20,
+      'random_rotation' : 1
+    }
+  },
+
+  'mesh_ellipsoid' : {
+    'type' : 'ellipsoid',
+    'parameters' : {
+      'center' : [ 10.0, 2.0, 3.0 ],
+      'eigenvector1' : [ 1.0, 0.0, 0.0 ],
+      'eigenvector2' : [ 0.0, 1.0, 0.0 ],
+      'eigenvector3' : [ 0.0, 0.0, 1.0 ],
+      'radius1' : 3.5,
+      'radius2' : 1.5,
+      'radius3' : 2.5,
+      'sphere_vertex_count' : 200,
+      'random_rotation' : 1,
+    }
+  },
+
+  'mesh_sphere' : {
+    'type' : 'sphere',
+    'parameters' : {
+      'center' : [ 20.0, 2.0, 3.0 ],
+      'radius' : 3.5,
+      'sphere_vertex_count' : 200
+    }
+  },
+
+  'mesh_box' : {
+    'type' : 'box',
+    'parameters' : {
+      'lower_point' : [ -1.0, 2.0, -3.0 ],
+      'upper_point' : [ +1.0, 2.5, 5.0 ],
+      'random_rotation' : 1
+    }
+  },
+
+  'mesh_star' : {
+    'type' : 'star',
+    'parameters' : {
+      'center' : [ 30.0, 2.0, 3.0 ],
+      'radius' : 3.5,
+      'peak_count' : 12,
+      'peak_magnitudes' : [ 1.0, 2.0, 1.5, 2.0, 3.5, 6.0, 1.0, 2.0, 1.5, 2.0, 3.5, 6.0 ],
+      'peak_aperture_angles_in_degrees' : [ 30, 15, 22, 45, 17, 10, 30, 15, 22, 45, 17, 10 ],
+      'sphere_vertex_count' : 600,
+      'sharp_peak' : 1,
+      'symmetric_peak' : 1,
+      'random_rotation' : 1
+    }
+  }
+}

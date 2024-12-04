@@ -1,0 +1,302 @@
+attributes = {
+  'field_of_view' : ( -50.0, -50.0, -50.0, +50.0, +50.0, +50.0 ),
+  'grid_resolution' : 1.0,
+  'sphere_atom_overlap_solver_maximum_iteration_count' : 20,
+  'populations' : 
+    {
+
+      'my-first-fiber-population' :
+        {
+
+          'type' : 'fiber-population',
+          'parameters' :
+            {
+
+              'sphere_atom_oversampling_ratio' : 10.0,
+
+              'axon' :
+                {
+
+                  'diameter_distribution' :
+                    {
+
+                      'type' : 'gamma-distribution',
+                      'parameters' :
+                        {
+
+                          'mean' : 5.0,
+                          'stddev' : 1.5,
+                          'multiplicator' : 1e3,
+                          'upper_boundary' : 10.0
+
+                        }
+
+                    },
+
+                  'global_angular_dispersion_in_degrees' : 5.0,
+
+                  'has_tortuosity' : 1,
+                  'tortuosity' :
+                    {
+
+                      'magnitude' : 0.3,
+                      'angular_dispersion_in_degrees' : 1.0,
+                      'wave_length' : 70.0
+
+                    },
+
+                  'has_beading' : 0,
+                  'beading' : 
+                    {
+
+                      'interbeading_length_distribution' :
+                        {
+
+                          'type' : 'gamma-distribution',
+                          'parameters' :
+                            {
+
+                              'mean' : 12.0,
+                              'stddev' : 4.0
+
+                            }
+
+                        },
+                      'width_distribution' :
+                        {
+
+                          'type' : 'gamma-distribution',
+                          'parameters' :
+                            {
+
+                              'mean' : 3.0,
+                              'stddev' : 0.8
+
+                            }
+
+                        },
+                      'magnitude_ratio_distribution' :
+                        {
+
+                          'type' : 'gamma-distribution',
+                          'parameters' :
+                            {
+
+                              'mean' : 1.9,
+                              'stddev' : 0.001
+
+                            }
+
+                        }
+
+                    }
+
+                  'mean_orientation' : ( 0.0, 0.0, 1.0 ),
+
+                  'permeability_distribution' :
+                    {
+
+                      'type' : 'gamma-distribution',
+                      'parameters' :
+                        {
+
+                          'mean' : 2.0,
+                          'stddev' : 1.0
+
+                        }
+
+                    }
+
+                },
+
+              'has_myelin_sheath' : 1,
+              'myelin_sheath' :
+                {
+
+                  'g_ratio_distribution' :
+                    {
+
+                      'type' : 'gamma-distribution',
+                      'parameters' :
+                        {
+
+                          'mean' : 0.6,
+                          'stddev' : 0.06
+
+                        }
+
+                    },
+
+                  'has_ranvier_nodes' : 1,
+                  'internodal_length_to_node_width_distribution' :
+                    {
+
+                      'type' : 'gamma-distribution',
+                      'parameters' :
+                        {
+
+                          'mean' : 40.0,
+                          'stddev' : 0.5
+
+                        }
+
+                    }
+
+                }
+
+              'volume_fraction' : 0.1
+
+
+            }
+
+        },
+
+      'my-second-fiber-population' :
+        {
+
+          'type' : 'fiber-population',
+          'parameters' :
+            {
+
+              'sphere_atom_oversampling_ratio' : 10.0,
+
+              'axon' :
+                {
+
+                  'diameter_distribution' :
+                    {
+
+                      'type' : 'gamma-distribution',
+                      'parameters' :
+                        {
+
+                          'mean' : 5.0,
+                          'stddev' : 1.5,
+                          'multiplicator' : 1e3,
+                          'upper_boundary' : 10.0
+
+                        }
+
+                    },
+
+                  'global_angular_dispersion_in_degrees' : 5.0,
+
+                  'has_tortuosity' : 1,
+                  'tortuosity' :
+                    {
+
+                      'magnitude' : 0.3,
+                      'angular_dispersion_in_degrees' : 1.0,
+                      'wave_length' : 70.0
+
+                    },
+
+                  'has_beading' : 0,
+                  'beading' : 
+                    {
+
+                      'interbeading_length_distribution' :
+                        {
+
+                          'type' : 'gamma-distribution',
+                          'parameters' :
+                            {
+
+                              'mean' : 12.0,
+                              'stddev' : 4.0
+
+                            }
+
+                        },
+                      'width_distribution' :
+                        {
+
+                          'type' : 'gamma-distribution',
+                          'parameters' :
+                            {
+
+                              'mean' : 3.0,
+                              'stddev' : 0.8
+
+                            }
+
+                        },
+                      'magnitude_ratio_distribution' :
+                        {
+
+                          'type' : 'gamma-distribution',
+                          'parameters' :
+                            {
+
+                              'mean' : 1.9,
+                              'stddev' : 0.001
+
+                            }
+
+                        }
+
+                    }
+
+                  'mean_orientation' : ( 1.0, 0.0, 0.0 ),
+
+                  'permeability_distribution' :
+                    {
+
+                      'type' : 'gamma-distribution',
+                      'parameters' :
+                        {
+
+                          'mean' : 2.0,
+                          'stddev' : 1.0
+
+                        }
+
+                    }
+
+                },
+
+              'has_myelin_sheath' : 1,
+              'myelin_sheath' :
+                {
+
+                  'g_ratio_distribution' :
+                    {
+
+                      'type' : 'gamma-distribution',
+                      'parameters' :
+                        {
+
+                          'mean' : 0.6,
+                          'stddev' : 0.06
+
+                        }
+
+                    },
+
+                  'has_ranvier_nodes' : 1,
+                  'internodal_length_to_node_width_distribution' :
+                    {
+
+                      'type' : 'gamma-distribution',
+                      'parameters' :
+                        {
+
+                          'mean' : 40.0,
+                          'stddev' : 0.5
+
+                        }
+
+                    }
+
+                }
+
+              'volume_fraction' : 0.1
+
+
+            }
+
+        }
+
+    }
+
+}

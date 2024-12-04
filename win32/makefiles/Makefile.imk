@@ -1,0 +1,82 @@
+# ---------------------------------------
+# add myself to dependency list
+# ---------------------------------------
+#MAKEFILE_CHAIN += $(IDEA_BASE)/n4/pkg/MrServers/Gkg/makefiles/Makefile.imk
+
+GKG_PATH = $(IDEA_BASE)/n4/pkg/MrServers/Gkg
+
+# 
+# GKG sources
+#
+
+GKGSOURCES  = gkg-communication-dispatcher/Dispatcher.cpp
+GKGSOURCES += gkg-communication-dispatcher/IOHandler.cpp
+GKGSOURCES += gkg-communication-rpc/RpcCallback.cpp
+GKGSOURCES += gkg-communication-rpc/RpcCommand.cpp
+GKGSOURCES += gkg-communication-rpc/RpcCommandReader.cpp
+GKGSOURCES += gkg-communication-rpc/RpcCommandWriter.cpp
+GKGSOURCES += gkg-communication-rpc/RpcEpilog.cpp
+GKGSOURCES += gkg-communication-rpc/RpcProlog.cpp
+GKGSOURCES += gkg-communication-rpc/RpcReader.cpp
+GKGSOURCES += gkg-communication-rpc/RpcWriter.cpp
+GKGSOURCES += gkg-communication-socket/IOStream.cpp
+GKGSOURCES += gkg-communication-socket/IOStreamBase.cpp
+GKGSOURCES += gkg-communication-socket/IStream.cpp
+GKGSOURCES += gkg-communication-socket/OStream.cpp
+GKGSOURCES += gkg-communication-socket/SocketBuffer.cpp
+GKGSOURCES += gkg-communication-socket/SocketHeader.cpp
+GKGSOURCES += gkg-communication-socket/SocketReader.cpp
+GKGSOURCES += gkg-communication-socket/SocketRegistry.cpp
+GKGSOURCES += gkg-communication-socket/SocketService.cpp
+GKGSOURCES += gkg-communication-socket/SocketStream.cpp
+GKGSOURCES += gkg-communication-socket/SocketWriter.cpp
+GKGSOURCES += gkg-communication-tcpip/Host.cpp
+GKGSOURCES += gkg-core-exception/HelpOptionException.cpp
+GKGSOURCES += gkg-realtime-mri-rpc/EvaRpcTransferBValueCommand.cpp
+GKGSOURCES += gkg-realtime-mri-rpc/EvaRpcTransferChannelCountCommand.cpp
+GKGSOURCES += gkg-realtime-mri-rpc/EvaRpcTransferDataInfoCommand.cpp
+GKGSOURCES += gkg-realtime-mri-rpc/EvaRpcTransferDiffusionInfoCommand.cpp
+GKGSOURCES += gkg-realtime-mri-rpc/EvaRpcTransferDoubleCommand.cpp
+GKGSOURCES += gkg-realtime-mri-rpc/EvaRpcTransferErrorCodeCommand.cpp
+GKGSOURCES += gkg-realtime-mri-rpc/EvaRpcTransferImageCommand.cpp
+GKGSOURCES += gkg-realtime-mri-rpc/EvaRpcTransferIntegerCommand.cpp
+GKGSOURCES += gkg-realtime-mri-rpc/EvaRpcTransferMiniHeaderCommand.cpp
+GKGSOURCES += gkg-realtime-mri-rpc/EvaRpcTransferMosaicCommand.cpp
+GKGSOURCES += gkg-realtime-mri-rpc/EvaRpcTransferRigidTransformationCommand.cpp
+GKGSOURCES += gkg-realtime-mri-rpc/EvaRpcTransferStateCommand.cpp
+GKGSOURCES += gkg-realtime-mri-rpc/EvaRpcTransferStringCommand.cpp
+GKGSOURCES += gkg-realtime-mri-rpc/EvaRpcTransferTrTeTiCommand.cpp
+GKGSOURCES += gkg-realtime-mri-rpc/EvaRpcTransferVector3dCommand.cpp
+GKGSOURCES += gkg-realtime-mri-rpc/EvaRpcTransferVolumeCommand.cpp
+GKGSOURCES += gkg-realtime-mri-rpc/EvaRpcTransferVolumeResolutionCommand.cpp
+GKGSOURCES += gkg-realtime-mri-rpc/EvaRpcTransferVolumeSizeCommand.cpp
+GKGSOURCES += gkg-win32-feedback/RealTimeFeedbackFunctor.cpp
+
+#
+# Objects
+#
+
+GKG_OBJECTS = $(patsubst %.cpp,$(SOURCE_PATH)/$(PROD_DIR_XLINUX)/%.o,$(GKGSOURCES))
+GKG_OBJECTS2 = $(patsubst %.cpp,$(SOURCE_PATH)/$(PROD_DIR_XLINUX)/%.o,$(notdir $(GKGSOURCES)))
+
+OBJECTS_XLINUX   += $(GKG_OBJECTS2)
+
+# 
+# GKG includes
+#
+
+XLINUX_INCLUDE_PATHS += -I$(GKG_PATH)
+
+#
+# Build rules
+#
+
+CPPFLAGS_LOCAL  += -D__STDC_LIMIT_MACROS -D__STDC_CONSTANT_MACROS -D__STDC_FORMAT_MACROS
+
+$(SOURCE_PATH)/$(PROD_DIR_XLINUX)/%.o: $(GKG_PATH)/%.cpp
+	@ $(ECHO) -e "\n=== Compiling GKG  xlinux RELEASE $<  --> $@\n"
+	@ mkdir -p $(SOURCE_PATH)/$(PROD_DIR_XLINUX)
+	$(XLINUX_CCC) $(XLINUX_CPPFLAGS_RELEASE) $(XLINUX_CCCFLAGS) -o$(SOURCE_PATH)/$(PROD_DIR_XLINUX)/$(notdir $@) -c $<
+	@ $(ECHO) -e "=== Compiled: $@\n\n"
+
+gkg: $(GKG_OBJECTS)

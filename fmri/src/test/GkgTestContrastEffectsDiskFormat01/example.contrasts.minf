@@ -1,0 +1,14 @@
+attributes = {
+    'object_type' : 'ContrastEffects',
+    'contrast_effects' : [ {
+                             'name' : 'visual-auditive',
+                             'regressor_names' : [ 'visual', 'auditive' ],
+                             'weights' : [ +1.0, -1.0 ],
+                           },
+                           {
+                             'name' : 'calculation+reading',
+                             'regressor_names' : [ 'calculation', 'reading' ],
+                             'weights' : [ +1.0, +1.0 ],
+                           }
+                         ]
+    }

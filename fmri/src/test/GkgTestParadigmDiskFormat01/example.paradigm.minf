@@ -1,0 +1,18 @@
+attributes = {
+    'object_type' : 'Paradigm',
+    'stimuli' : [ {
+                    'name' : 'visual',
+                    'type' : 'discrete_stimulus',
+                    'times' : [ 15.0, 45.0, 75.0, 105.0, 135.0, 165.0 ],
+                    'durations' : [ 15.0, 15.0, 15.0, 15.0, 15.0, 15.0 ],
+                    'magnitudes' : [ 1.0, 1.0, 1.0, 1.0, 1.0, 1.0 ],
+                  },
+                  {
+                    'name' : 'auditive',
+                    'type' : 'continuous_stimulus',
+                    'starting_time' : 3.5,
+                    'sampling_period' : 0.02,
+                    'magnitudes' : [ 1.0, 2.0, 3.0, 4.0, 5.0, 6.0 ],
+                  }
+                ]
+    }

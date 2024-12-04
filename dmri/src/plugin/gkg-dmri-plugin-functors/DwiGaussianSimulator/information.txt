@@ -1,0 +1,55 @@
+#component count
+2
+
+################################################################################
+# first component
+################################################################################
+
+# component volume fraction
+0.5
+
+# fast tensor ratio
+0.8
+
+# rotation angle in degrees
+0.0
+
+# fast direct tensor coefficients Dxx Dxy Dxz Dyy Dyz Dzz
+1.50e-3 0 0 0.25e-3 0 0.25e-3
+
+# slow direct tensor coefficients Dxx Dxy Dxz Dyy Dyz Dzz
+0.20e-3 0 0 0.02e-3 0 0.02e-3
+
+
+################################################################################
+# second component
+################################################################################
+
+# component volume fraction
+0.5
+
+# fast tensor ratio
+0.8
+
+# rotation angle in degrees
+45.0
+
+# fast direct tensor coefficients Dxx Dxy Dxz Dyy Dyz Dzz
+1.50e-3 0 0 0.25e-3 0 0.25e-3
+
+# slow direct tensor coefficients Dxx Dxy Dxz Dyy Dyz Dzz
+0.20e-3 0 0 0.02e-3 0 0.02e-3
+
+
+################################################################################
+# orientation(s) for ODF calculation
+################################################################################
+
+# orientation count
+4
+
+# orientation(s)
+1 0 0
+0.707 -0.707 0
+0.92388 -0.38268 0
+-0.38268 -0.92388 0

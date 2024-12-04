@@ -1,0 +1,144 @@
+attributes = {
+  'field_of_view' : ( -50.0, -50.0, -50.0, +50.0, +50.0, +50.0 ),
+  'grid_resolution' : 1.0,
+  'sphere_atom_overlap_solver_maximum_iteration_count' : 0,
+  'populations' : 
+    {
+
+      'my-first-astrocyte-population' :
+        {
+
+          'type' : 'astrocyte-population',
+          'parameters' :
+            {
+
+              'soma' :
+                {
+
+                  'diameter_distribution' :
+                    {
+
+                      'type' : 'gamma-distribution',
+                      'parameters' :
+                        {
+
+                          'mean' : 2.0,
+                          'stddev' : 0.7,
+                          'multiplicator' : 1e3,
+                          'upper_boundary' : 10.0
+
+                        }
+
+                    },
+
+                  'permeability_distribution' :
+                    {
+
+                      'type' : 'gamma-distribution',
+                      'parameters' :
+                        {
+
+                          'mean' : 0.5,
+                          'stddev' : 0.1
+
+                        }
+
+                    }
+
+                },
+
+              'process' :
+                {
+
+                  'sphere_atom_oversampling_ratio' : 10.0,
+
+                  'minimum_segment_point_count' : 20,
+
+                  'diameter_distribution' :
+                    {
+
+                      'type' : 'gamma-distribution',
+                      'parameters' :
+                        {
+
+                          'mean' : 1.2,
+                          'stddev' : 0.4,
+                          'multiplicator' : 1e3,
+                          'upper_boundary' : 10.0
+
+                        }
+
+                    },
+
+                  'balancing_factor' : 0.5,
+
+                  'node_count_distribution' :
+                    {
+
+                      'type' : 'gamma-distribution',
+                      'parameters' :
+                        {
+
+                          'mean' : 100.0,
+                          'stddev' : 4.0,
+                          'multiplicator' : 1e3,
+                          'upper_boundary' : 150.0
+
+                        }
+
+                    },
+
+                  'has_tortuosity' : 1,
+                  'tortuosity' :
+                    {
+
+                      'magnitude' : 0.2,
+                      'angular_dispersion_in_degrees' : 2,
+                      'wave_length' : 4.0
+
+                    },
+
+ 
+                  'permeability_distribution' :
+                    {
+
+                      'type' : 'gamma-distribution',
+                      'parameters' :
+                        {
+
+                          'mean' : 0.5,
+                          'stddev' : 0.1
+
+                        }
+
+                    }
+
+                },
+
+              'total_diameter_distribution' :
+                {
+
+                  'type' : 'gamma-distribution',
+                  'parameters' :
+                    {
+
+                      'mean' : 25.0,
+                      'stddev' : 1.5,
+                      'multiplicator' : 1e3,
+                      'upper_boundary' : 30.0
+
+                    }
+
+                },
+
+
+              'volume_fraction' : 0.0001,
+
+            }
+
+        }
+
+    }
+
+}
+

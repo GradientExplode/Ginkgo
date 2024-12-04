@@ -1,0 +1,6 @@
+################################################################################
+# launching application
+################################################################################
+ANTSPATH=/usr/bin
+
+/usr/bin/python /usr/share/gkg/scripts/GkgAntsRegistration3d.py $@

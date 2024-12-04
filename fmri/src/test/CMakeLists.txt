@@ -1,0 +1,2 @@
+add_subdirectory( GkgTestContrastEffectsDiskFormat01 )
+add_subdirectory( GkgTestParadigmDiskFormat01 )

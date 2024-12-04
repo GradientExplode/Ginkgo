@@ -1,0 +1,1739 @@
+#include <gkg-processing-plugin-nifti/NiftiDiskFormat.h>
+#include <gkg-core-io/DiskFormatFactory_i.h>
+#include <gkg-communication-sysinfo/ConfigurationInfo.h>
+#include <gkg-core-io/TypedDiskFormat_i.h>
+#include <gkg-core-io/ByteOrder.h>
+#include <gkg-processing-container/Volume_i.h>
+#include <gkg-core-io/TypeOf.h>
+#include <gkg-core-exception/FileNotFoundException.h>
+#include <gkg-core-exception/ObjectTypeException.h>
+#include <gkg-core-exception/ItemTypeException.h>
+#include <gkg-core-exception/WrongFormatException.h>
+#include <gkg-core-exception/InconsistentHeaderException.h>
+#include <gkg-processing-algobase/Math.h>
+#include <gkg-processing-transform/HomogeneousTransform3d.h>
+#include <gkg-processing-transform/Scaling3d.h>
+#include <gkg-core-object/Dictionary.h>
+#include <gkg-core-object/GenericObject_i.h>
+#include <gkg-core-exception/Exception.h>
+#include <fstream>
+
+
+template < class T >
+gkg::NiftiDiskFormat< T >::NiftiDiskFormat()
+                          : gkg::TypedDiskFormat< gkg::Volume< T > >()
+{
+
+  this->_extensions.insert( ".hdr" );
+  this->_extensions.insert( ".img" );
+  this->_extensions.insert( ".hdr.gz" );
+  this->_extensions.insert( ".img.gz" );
+  this->_extensions.insert( ".nii" );
+  this->_extensions.insert( ".nii.gz" );
+  this->_extensions.insert( getHeaderExtension() );
+
+}
+
+
+template < class T >
+gkg::NiftiDiskFormat< T >::~NiftiDiskFormat()
+{
+}
+
+
+template < class T >
+std::string gkg::NiftiDiskFormat< T >::getName() const
+{
+
+  return "nifti";
+
+}
+
+
+template < class T >
+void gkg::NiftiDiskFormat< T >::readHeader( const std::string& name,
+                                            gkg::HeaderedObject& object ) const
+{
+
+  try
+  {
+
+    // first we add all NIFTI specific attributes
+    object.addSemantic( "__nifti__", "resolutionX",
+                        gkg::Semantic( gkg::TypeOf< double >::getName() ) );
+    object.addSemantic( "__nifti__", "resolutionY",
+                        gkg::Semantic( gkg::TypeOf< double >::getName() ) );
+    object.addSemantic( "__nifti__", "resolutionZ",
+                        gkg::Semantic( gkg::TypeOf< double >::getName() ) );
+    object.addSemantic( "__nifti__", "resolutionT",
+                        gkg::Semantic( gkg::TypeOf< double >::getName() ) );
+    object.addSemantic( "__generic__", "nifti_to_gkg_transform3d",
+                        gkg::Semantic( gkg::TypeOf< std::vector< float > >::getName(),
+                                       false,
+                                       true ) );
+
+    // reading the meta-information header
+    bool hasStdHeader = false;
+    try
+    {
+
+      this->gkg::DiskFormat::readHeader( name, object );
+      hasStdHeader = true;
+
+    }
+    catch ( gkg::FileNotFoundException& e )
+    {
+
+      // std::cerr << e.what() << ", "
+      //           << "meta-information not present"
+      //           << std::endl;
+
+    }
+    catch ( std::exception& e )
+    {
+
+      throw std::runtime_error( e.what() );
+
+    }
+
+    // checking that it is a volume
+    std::string objectType;
+    object.getHeader().getAttribute( "object_type", objectType );
+    if ( objectType != "Volume" )
+    {
+
+      throw gkg::ObjectTypeException( this->getNameWithoutExtension( name ) +
+                                      getHeaderExtension() );
+
+    }
+
+    // checking that it has the good item type
+    std::string itemType;
+    object.getHeader().getAttribute( "item_type", itemType );
+    if ( ! gkg::TypeOf< T >::isSameType( itemType ) )
+    {
+
+      throw gkg::ItemTypeException( this->getNameWithoutExtension( name ) +
+                                    getHeaderExtension() );
+
+    }
+
+    // setting debug level for status reporting
+    nifti_set_debug_level( 0 );
+
+    // checking that it is NIFTI file
+    if ( !is_nifti_file( this->getNameWithoutExtension( name ).c_str() ) )
+    {
+      throw gkg::WrongFormatException( this->getNameWithoutExtension( name ) );
+
+    }
+
+    // reading the NIFTI header
+    nifti_image* niftiImage =
+      nifti_image_read( this->getNameWithoutExtension( name ).c_str(), 0 );
+
+    if ( !niftiImage )
+    {
+
+      throw gkg::FileNotFoundException( this->getNameWithoutExtension( name ) + 
+                                        ".hdr|.hdr.gz|.nii|.nii.gz" );
+
+    }
+
+    // adding NIFTI dictionary to object header
+    gkg::Dictionary niftiDictionary;
+    fillNiftiDictionary( niftiImage, niftiDictionary ); 
+    object.getHeader().addAttribute( "nifti", niftiDictionary );
+
+    // checking that it is the good NIFTI type
+    if ( niftiImage->datatype != getShortType() )
+    {
+
+      throw gkg::ItemTypeException( this->getNameWithoutExtension( name ) +
+                                    ".hdr|.hdr.gz|.nii|.nii.gz" );
+
+    }
+
+    // consistency checks between meta-information and 
+    // <*.hdr|.hdr.gz|.nii|.nii.gz>
+    if ( hasStdHeader )
+    {
+
+      int32_t sizeX;
+      object.getHeader().getAttribute( "sizeX", sizeX );
+      if ( sizeX != niftiImage->dim[ 1 ] )
+      {
+
+        throw gkg::InconsistentHeaderException(
+                                         "sizeX",
+                                         this->getNameWithoutExtension( name ) +
+                                         ".hdr|.hdr.gz|.nii|.nii.gz" );
+
+      }
+
+      int32_t sizeY;
+      object.getHeader().getAttribute( "sizeY", sizeY );
+      if ( sizeY != niftiImage->dim[ 2 ] )
+      {
+
+        throw gkg::InconsistentHeaderException(
+                                         "sizeY",
+                                         this->getNameWithoutExtension( name ) +
+                                         ".hdr|.hdr.gz|.nii|.nii.gz" );
+
+      }
+
+      int32_t sizeZ;
+      object.getHeader().getAttribute( "sizeZ", sizeZ );
+      if ( sizeZ != niftiImage->dim[ 3 ] )
+      {
+
+        throw gkg::InconsistentHeaderException(
+                                         "sizeZ",
+                                         this->getNameWithoutExtension( name ) +
+                                         ".hdr|.hdr.gz|.nii|.nii.gz" );
+
+      }
+
+      int32_t sizeT;
+      object.getHeader().getAttribute( "sizeT", sizeT );
+      if ( sizeT != niftiImage->dim[ 4 ] )
+      {
+
+        throw gkg::InconsistentHeaderException(
+                                         "sizeT",
+                                         this->getNameWithoutExtension( name ) +
+                                         ".hdr|.hdr.gz|.nii|.nii.gz" );
+
+      }
+
+      if ( object.getHeader().hasAttribute( "resolutionX" ) )
+      {
+
+        double resolutionX;
+        object.getHeader().getAttribute( "resolutionX", resolutionX );
+        if ( !gkg::equal( resolutionX,
+                          ( double )niftiImage->pixdim[ 1 ], 1e-4 ) )
+        {
+
+          throw gkg::InconsistentHeaderException(
+                                         "resolutionX",
+                                         this->getNameWithoutExtension( name ) +
+                                         ".hdr|.hdr.gz|.nii|.nii.gz" );
+
+        }
+
+      }
+
+      if ( object.getHeader().hasAttribute( "resolutionY" ) )
+      {
+
+        double resolutionY;
+        object.getHeader().getAttribute( "resolutionY", resolutionY );
+        if ( !gkg::equal( resolutionY,
+                          ( double )niftiImage->pixdim[ 2 ], 1e-4 ) )
+        {
+
+          throw gkg::InconsistentHeaderException(
+                                         "resolutionY",
+                                         this->getNameWithoutExtension( name ) +
+                                         ".hdr|.hdr.gz|.nii|.nii.gz" );
+
+        }
+
+      }
+
+      if ( object.getHeader().hasAttribute( "resolutionZ" ) )
+      {
+
+        double resolutionZ;
+        object.getHeader().getAttribute( "resolutionZ", resolutionZ );
+        if ( !gkg::equal( resolutionZ,
+                          ( double )niftiImage->pixdim[ 3 ], 1e-4 ) )
+        {
+
+          throw gkg::InconsistentHeaderException(
+                                         "resolutionZ",
+                                         this->getNameWithoutExtension( name ) +
+                                         ".hdr|.hdr.gz|.nii|.nii.gz" );
+
+        }
+
+      }
+
+      if ( object.getHeader().hasAttribute( "resolutionT" ) )
+      {
+
+        double resolutionT;
+        object.getHeader().getAttribute( "resolutionT", resolutionT );
+        if ( !gkg::equal( resolutionT,
+                          ( double )niftiImage->pixdim[ 4 ], 1e-4 ) )
+        {
+
+          throw gkg::InconsistentHeaderException(
+                                         "resolutionT",
+                                         this->getNameWithoutExtension( name ) +
+                                         ".hdr|.hdr.gz|.nii|.nii.gz" );
+
+        }
+
+      }
+
+    }
+    else
+    {
+
+      // putting the <*.hdr|.hdr.gz|.nii|.nii.gz> informations into the object 
+      // header
+      object.getHeader()[ "sizeX" ] = niftiImage->dim[ 1 ];
+      object.getHeader()[ "sizeY" ] = niftiImage->dim[ 2 ];
+      object.getHeader()[ "sizeZ" ] = niftiImage->dim[ 3 ];
+      object.getHeader()[ "sizeT" ] = niftiImage->dim[ 4 ];
+
+    }
+    if ( !object.getHeader().hasAttribute( "resolutionX" ) )
+    {
+
+      object.getHeader().addAttribute( "resolutionX",
+                                       ( double )niftiImage->pixdim[ 1 ] );
+
+    }
+    if ( !object.getHeader().hasAttribute( "resolutionY" ) )
+    {
+
+      object.getHeader().addAttribute( "resolutionY",
+                                       ( double )niftiImage->pixdim[ 2 ] );
+
+    }
+    if ( !object.getHeader().hasAttribute( "resolutionZ" ) )
+    {
+
+      object.getHeader().addAttribute( "resolutionZ",
+                                       ( double )niftiImage->pixdim[ 3 ] );
+
+    }
+    if ( !object.getHeader().hasAttribute( "resolutionT" ) )
+    {
+
+      object.getHeader().addAttribute( "resolutionT",
+                                       ( double )niftiImage->pixdim[ 4 ] );
+
+    }
+
+    // building NIFTI to GKG transformation
+    // NIFTI convention is +x=Right, +y=Anterior, +z=Superior
+    // GKG convention is +x=Left, +y=Posterior, +z=Inferior
+    int iDirection, jDirection, kDirection;
+
+
+    if ( niftiImage->qform_code > NIFTI_XFORM_UNKNOWN )
+    {
+
+      nifti_mat44_to_orientation( niftiImage->qto_xyz,
+                                  &iDirection,
+                                  &jDirection,
+                                  &kDirection );
+
+    }
+    else if ( niftiImage->sform_code > NIFTI_XFORM_UNKNOWN )
+    {
+
+      nifti_mat44_to_orientation( niftiImage->sto_xyz,
+                                  &iDirection,
+                                  &jDirection,
+                                  &kDirection );
+
+    }
+    else
+    {
+
+      iDirection = NIFTI_L2R;
+      jDirection = NIFTI_P2A;
+      kDirection = NIFTI_I2S;
+
+    }
+    float d00 = 0.0, d01 = 0.0, d02 = 0.0, d03 = 0.0;
+    float d10 = 0.0, d11 = 0.0, d12 = 0.0, d13 = 0.0;
+    float d20 = 0.0, d21 = 0.0, d22 = 0.0, d23 = 0.0;
+    float d30 = 0.0, d31 = 0.0, d32 = 0.0, d33 = 1.0;
+
+    if ( ( iDirection == NIFTI_R2L ) || ( iDirection == NIFTI_L2R ) )
+    {
+
+      d00 = ( ( iDirection == NIFTI_R2L ) ? +1.0 : -1.0 );
+      d03 = ( ( iDirection == NIFTI_R2L ) ? 0.0 : niftiImage->dim[1] - 1.0 );
+
+      if ( ( jDirection == NIFTI_A2P ) || ( jDirection == NIFTI_P2A ) )
+      {
+
+        //  case i->x, j->y, k->z
+        d11 = ( ( jDirection == NIFTI_A2P ) ? +1.0 : -1.0 );
+        d13 = ( ( jDirection == NIFTI_A2P ) ? 0.0 : niftiImage->dim[2] - 1.0 );
+        d22 = ( ( kDirection == NIFTI_S2I ) ? +1.0 : -1.0 );
+        d23 = ( ( kDirection == NIFTI_S2I ) ? 0.0 : niftiImage->dim[3] - 1.0 );
+
+      }
+      else
+      {
+
+        //  case i->x, j->z, k->y
+        d21 = ( ( jDirection == NIFTI_S2I ) ? +1.0 : -1.0 );
+        d23 = ( ( jDirection == NIFTI_S2I ) ? 0.0 : niftiImage->dim[2] - 1.0 );
+        d12 = ( ( kDirection == NIFTI_A2P ) ? +1.0 : -1.0 );
+        d13 = ( ( kDirection == NIFTI_A2P ) ? 0.0 : niftiImage->dim[3] - 1.0 );
+
+      }
+
+    }
+    else
+    {
+
+      if ( ( jDirection == NIFTI_A2P ) || ( jDirection == NIFTI_P2A ) )
+      {
+
+        //  case i->z, j->y, k->x
+        d20 = ( ( iDirection == NIFTI_S2I ) ? +1.0 : -1.0 );
+        d23 = ( ( iDirection == NIFTI_S2I ) ? 0.0 : niftiImage->dim[1] - 1.0 );
+        d11 = ( ( jDirection == NIFTI_A2P ) ? +1.0 : -1.0 );
+        d13 = ( ( jDirection == NIFTI_A2P ) ? 0.0 : niftiImage->dim[2] - 1.0 );
+        d02 = ( ( kDirection == NIFTI_R2L ) ? +1.0 : -1.0 );
+        d03 = ( ( kDirection == NIFTI_R2L ) ? 0.0 : niftiImage->dim[3] - 1.0 );
+
+      }
+      else
+      {      
+
+        if ( ( kDirection == NIFTI_S2I ) || ( kDirection == NIFTI_I2S ) )
+        {
+
+          //  case i->y, j->x, k->z
+          d10 = ( ( iDirection == NIFTI_A2P ) ? +1.0 : -1.0 );
+          d13 = ( ( iDirection == NIFTI_A2P ) ? 0.0 : niftiImage->dim[1] -1.0 );
+          d01 = ( ( jDirection == NIFTI_R2L ) ? +1.0 : -1.0 );
+          d03 = ( ( jDirection == NIFTI_R2L ) ? 0.0 : niftiImage->dim[2] -1.0 );
+          d22 = ( ( kDirection == NIFTI_S2I ) ? +1.0 : -1.0 );
+          d23 = ( ( kDirection == NIFTI_S2I ) ? 0.0 : niftiImage->dim[3] -1.0 );
+
+        }
+        else
+        {
+
+          if ( ( iDirection == NIFTI_A2P ) || ( iDirection == NIFTI_P2A ) )
+          {
+
+            //  case i->y, j->z, k->x
+            d10 = ( ( iDirection == NIFTI_A2P ) ? +1.0 : -1.0 );
+            d13 = ( ( iDirection == NIFTI_A2P ) ? 0.0 : niftiImage->dim[1]-1.0);
+            d21 = ( ( jDirection == NIFTI_S2I ) ? +1.0 : -1.0 );
+            d23 = ( ( jDirection == NIFTI_S2I ) ? 0.0 : niftiImage->dim[2]-1.0);
+            d02 = ( ( kDirection == NIFTI_R2L ) ? +1.0 : -1.0 );
+            d03 = ( ( kDirection == NIFTI_R2L ) ? 0.0 : niftiImage->dim[3]-1.0);
+
+          }
+          else
+          {
+
+            //  case i->z, j->x, k->y
+            d20 = ( ( iDirection == NIFTI_S2I ) ? +1.0 : -1.0 );
+            d23 = ( ( iDirection == NIFTI_S2I ) ? 0.0 : niftiImage->dim[1]-1.0);
+            d01 = ( ( jDirection == NIFTI_R2L ) ? +1.0 : -1.0 );
+            d03 = ( ( jDirection == NIFTI_R2L ) ? 0.0 : niftiImage->dim[2]-1.0);
+            d12 = ( ( kDirection == NIFTI_A2P ) ? +1.0 : -1.0 );
+            d13 = ( ( kDirection == NIFTI_A2P ) ? 0.0 : niftiImage->dim[3]-1.0);
+
+          }
+
+        }
+
+      }
+
+    }
+
+    gkg::HomogeneousTransform3d< float > transform3d( d00, d01, d02, d03,
+                                                      d10, d11, d12, d13,
+                                                      d20, d21, d22, d23,
+                                                      d30, d31, d32, d33 );
+    if ( !object.getHeader().hasAttribute( "nifti_to_gkg_transform3d" ) )
+    {
+
+      object.getHeader().addAttribute( "nifti_to_gkg_transform3d",
+                                       transform3d.getDirectCoefficients() ); 
+
+    }
+    else
+    {
+
+      object.getHeader()[ "nifti_to_gkg_transform3d" ] =
+                                            transform3d.getDirectCoefficients(); 
+
+    }
+
+    // setting referential(s) and transform(s)
+    std::vector< std::string > referentials;
+    gkg::GenericObjectList transforms;
+
+    gkg::Scaling3d< float > scaling3d( niftiImage->pixdim[ 1 ],
+                                       niftiImage->pixdim[ 2 ],
+                                       niftiImage->pixdim[ 3 ] );
+
+
+    if ( niftiImage->qform_code > NIFTI_XFORM_UNKNOWN )
+    {
+
+      referentials.push_back( getReferentialName( niftiImage->qform_code ) );
+
+      gkg::HomogeneousTransform3d< float >
+                                       qto_xyz( niftiImage->qto_xyz.m[ 0 ][ 0 ],
+                                                niftiImage->qto_xyz.m[ 0 ][ 1 ],
+                                                niftiImage->qto_xyz.m[ 0 ][ 2 ],
+                                                niftiImage->qto_xyz.m[ 0 ][ 3 ],
+                                                niftiImage->qto_xyz.m[ 1 ][ 0 ],
+                                                niftiImage->qto_xyz.m[ 1 ][ 1 ],
+                                                niftiImage->qto_xyz.m[ 1 ][ 2 ],
+                                                niftiImage->qto_xyz.m[ 1 ][ 3 ],
+                                                niftiImage->qto_xyz.m[ 2 ][ 0 ],
+                                                niftiImage->qto_xyz.m[ 2 ][ 1 ],
+                                                niftiImage->qto_xyz.m[ 2 ][ 2 ],
+                                                niftiImage->qto_xyz.m[ 2 ][ 3 ],
+                                                0.0, 0.0, 0.0, 1.0 );
+      transforms.push_back( transform3d.compose( scaling3d ).
+                                        getInverseHomogeneousTransform3d().
+                                        compose( qto_xyz ).
+                                        getDirectCoefficients() );
+
+    }
+    if ( niftiImage->sform_code > NIFTI_XFORM_UNKNOWN )
+    {
+
+      referentials.push_back( getReferentialName( niftiImage->sform_code ) );
+
+      gkg::HomogeneousTransform3d< float >
+                                       sto_xyz( niftiImage->sto_xyz.m[ 0 ][ 0 ],
+                                                niftiImage->sto_xyz.m[ 0 ][ 1 ],
+                                                niftiImage->sto_xyz.m[ 0 ][ 2 ],
+                                                niftiImage->sto_xyz.m[ 0 ][ 3 ],
+                                                niftiImage->sto_xyz.m[ 1 ][ 0 ],
+                                                niftiImage->sto_xyz.m[ 1 ][ 1 ],
+                                                niftiImage->sto_xyz.m[ 1 ][ 2 ],
+                                                niftiImage->sto_xyz.m[ 1 ][ 3 ],
+                                                niftiImage->sto_xyz.m[ 2 ][ 0 ],
+                                                niftiImage->sto_xyz.m[ 2 ][ 1 ],
+                                                niftiImage->sto_xyz.m[ 2 ][ 2 ],
+                                                niftiImage->sto_xyz.m[ 2 ][ 3 ],
+                                                0.0, 0.0, 0.0, 1.0 );
+      transforms.push_back( transform3d.compose( scaling3d ).
+                                        getInverseHomogeneousTransform3d().
+                                        compose( sto_xyz ).
+                                        getDirectCoefficients() );
+
+    }
+
+
+    if ( !object.getHeader().hasAttribute( "referentials" ) )
+    {
+
+      object.getHeader().addAttribute( "referentials", referentials ); 
+
+    }
+    else
+    {
+
+      object.getHeader()[ "referentials" ] = referentials; 
+
+    }
+
+
+    if ( !object.getHeader().hasAttribute( "transformations" ) )
+    {
+
+      object.getHeader().addAttribute( "transformations", transforms ); 
+
+    }
+    else
+    {
+
+      object.getHeader()[ "transformations" ] = transforms; 
+
+    }
+
+
+    // deallocating nifti structure
+    nifti_image_free( niftiImage );
+
+    object.getHeader().setChanged();
+    object.getHeader().notifyObservers();
+
+  }
+  GKG_CATCH( "template < class T > void gkg::NiftiDiskFormat< T >::readHeader( "
+             "const std::string& name, gkg::HeaderedObject& object ) const" );
+
+}
+
+
+template < class T >
+void gkg::NiftiDiskFormat< T >::writeHeader(
+                                       const std::string& name,
+                                       const gkg::HeaderedObject& object ) const
+{
+
+  try
+  {
+
+    // writing the meta-information header
+    this->gkg::DiskFormat::writeHeader( name, object );
+
+  }
+  GKG_CATCH( "template < class T > void gkg::NiftiDiskFormat< T >::writeHeader( "
+             "const std::string& name, const gkg::HeaderedObject& object ) "
+             "const" );
+
+}
+
+
+template < class T >
+void gkg::NiftiDiskFormat< T >::read( const std::string& name,
+                                      gkg::Volume< T >& object ) const
+{
+
+  try
+  {
+
+std::cout << "je passe par la 1" << std::endl;
+
+    // reading header(s) meta-information and NIFTI header
+    readHeader( name, object );
+std::cout << "je passe par la 2" << std::endl;
+    // allocating volume
+    object.allocate();
+std::cout << "je passe par la 3" << std::endl;
+
+    // setting debug level for status reporting
+    nifti_set_debug_level( 0 );
+
+    // reading the NIFTI header and image
+    nifti_image* niftiImage =
+      nifti_image_read( this->getNameWithoutExtension( name ).c_str(), 1 );
+std::cout << "je passe par la 4" << std::endl;
+
+    if ( !niftiImage )
+    {
+
+      throw gkg::FileNotFoundException( this->getNameWithoutExtension( name ) + 
+                                        ".hdr|.hdr.gz|.nii|.nii.gz" );
+
+    }
+
+    // getting NIFTI to GKG homogeneous 3D transform
+    std::vector< float > nifti_to_gkg_transform3d;
+    if ( object.getHeader().hasAttribute( "nifti_to_gkg_transform3d" ) )
+    {
+
+      object.getHeader().getAttribute( "nifti_to_gkg_transform3d",
+                                       nifti_to_gkg_transform3d ); 
+
+    }
+    else
+    {
+
+      throw std::runtime_error(
+                        "unable to find 'nifti_to_gkg_transform3d' attribute" );
+
+    }
+std::cout << "je passe par la 5" << std::endl;
+
+    gkg::HomogeneousTransform3d< float >
+      transform3d( nifti_to_gkg_transform3d );
+
+std::cout << transform3d.getDirectCoefficient( 0, 0 ) << " "
+          << transform3d.getDirectCoefficient( 0, 1 ) << " "
+          << transform3d.getDirectCoefficient( 0, 2 ) << " "
+          << transform3d.getDirectCoefficient( 0, 3 ) << std::endl
+          << transform3d.getDirectCoefficient( 1, 0 ) << " "
+          << transform3d.getDirectCoefficient( 1, 1 ) << " "
+          << transform3d.getDirectCoefficient( 1, 2 ) << " "
+          << transform3d.getDirectCoefficient( 1, 3 ) << std::endl
+          << transform3d.getDirectCoefficient( 2, 0 ) << " "
+          << transform3d.getDirectCoefficient( 2, 1 ) << " "
+          << transform3d.getDirectCoefficient( 2, 2 ) << " "
+          << transform3d.getDirectCoefficient( 2, 3 ) << std::endl
+          << transform3d.getDirectCoefficient( 3, 0 ) << " "
+          << transform3d.getDirectCoefficient( 3, 1 ) << " "
+          << transform3d.getDirectCoefficient( 3, 2 ) << " "
+          << transform3d.getDirectCoefficient( 3, 3 ) << std::endl;          
+          
+    // copying data to volume
+    int32_t t;
+    int32_t sizeX = object.getSizeX();
+    int32_t sizeY = object.getSizeY();
+    int32_t sizeZ = object.getSizeZ();
+    int32_t sizeT = object.getSizeT();
+
+    gkg::Vector3d< float > from, to;
+
+    T* d = ( T* )niftiImage->data;
+    for ( t = 0; t < sizeT; t++ )
+    {
+
+      for ( from.z = 0; from.z < sizeZ; from.z += 1.0 )
+      {
+
+        for ( from.y = 0; from.y < sizeY; from.y += 1.0 )
+        {
+
+          for ( from.x = 0; from.x < sizeX; from.x += 1.0 )
+          {
+
+            transform3d.getDirect( from, to );
+            object( ( int32_t )rint( to.x ),
+                    ( int32_t )rint( to.y ),
+                    ( int32_t )rint( to.z ), t ) = *d;
+            ++ d;
+
+          }
+
+        }
+
+      }
+
+    }
+std::cout << "je passe par la 6" << std::endl;
+
+    // deallocating nifti structure
+    nifti_image_free( niftiImage );
+
+std::cout << "je passe par la 7" << std::endl;
+
+  }
+  GKG_CATCH( "template < class T > void gkg::NiftiDiskFormat< T >::read( "
+             "const std::string& name, gkg::Volume< T >& object ) const" );
+
+}
+
+
+template < class T >
+void gkg::NiftiDiskFormat< T >::write( const std::string& name,
+                                       gkg::Volume< T >& object,
+                                       bool ascii ) const
+{
+
+  try
+  {
+
+    if ( ascii == true )
+    {
+
+      throw std::runtime_error(
+                              "ascii mode not supported in NIFTI disk format" );
+
+    }
+    else
+    {
+
+      // writing header(s) meta-information
+      writeHeader( name, object );
+
+      // getting NIFTI to GKG homogeneous 3D transform
+      std::vector< float > nifti_to_gkg_transform3d;
+      bool addTransformation = false;
+      if ( object.getHeader().hasAttribute( "nifti_to_gkg_transform3d" ) )
+      {
+
+        object.getHeader().getAttribute( "nifti_to_gkg_transform3d",
+                                         nifti_to_gkg_transform3d ); 
+
+      }
+      else
+      {
+
+        nifti_to_gkg_transform3d.resize( 16U );
+        nifti_to_gkg_transform3d[  0 ] = -1.0;
+        nifti_to_gkg_transform3d[  1 ] = 0.0;
+        nifti_to_gkg_transform3d[  2 ] = 0.0;
+        nifti_to_gkg_transform3d[  3 ] = ( float )( object.getSizeX() - 1 );
+
+        nifti_to_gkg_transform3d[  4 ] = 0.0;
+        nifti_to_gkg_transform3d[  5 ] = -1.0;
+        nifti_to_gkg_transform3d[  6 ] = 0.0;
+        nifti_to_gkg_transform3d[  7 ] = ( float )( object.getSizeY() - 1 );
+
+        nifti_to_gkg_transform3d[  8 ] = 0.0;
+        nifti_to_gkg_transform3d[  9 ] = 0.0;
+        nifti_to_gkg_transform3d[ 10 ] = -1.0;
+        nifti_to_gkg_transform3d[ 11 ] = ( float )( object.getSizeZ() - 1 );
+
+        nifti_to_gkg_transform3d[ 12 ] = 0.0;
+        nifti_to_gkg_transform3d[ 13 ] = 0.0;
+        nifti_to_gkg_transform3d[ 14 ] = 0.0;
+        nifti_to_gkg_transform3d[ 15 ] = 1.0;
+
+        addTransformation = true;
+
+      }
+
+      gkg::HomogeneousTransform3d< float >
+        transform3d( nifti_to_gkg_transform3d );
+
+      // collecting resolution(s)
+      double resolutionX = 0.0;
+      double resolutionY = 0.0;
+      double resolutionZ = 0.0;
+      double resolutionT = 0.0;
+      getDoubleValue( "resolutionX", object, resolutionX, 1.0 );
+      getDoubleValue( "resolutionY", object, resolutionY, 1.0 );
+      getDoubleValue( "resolutionZ", object, resolutionZ, 1.0 );
+      getDoubleValue( "resolutionT", object, resolutionT, 1.0 );
+
+      // initializing NIFTI header
+      nifti_image* niftiImage = nifti_simple_init_nim();
+
+      // adding volume dimensionality
+      niftiImage->ndim = 4;
+      niftiImage->dim[ 0 ] = 4;
+
+      // storing size(s)
+      niftiImage->dim[ 1 ] = object.getSizeX();
+      niftiImage->dim[ 2 ] = object.getSizeY();
+      niftiImage->dim[ 3 ] = object.getSizeZ();
+      niftiImage->dim[ 4 ] = object.getSizeT();
+      niftiImage->dim[ 5 ] = 1;
+      niftiImage->dim[ 6 ] = 1;
+      niftiImage->dim[ 7 ] = 1;
+
+      niftiImage->nx = niftiImage->dim[ 1 ];
+      niftiImage->ny = niftiImage->dim[ 2 ];
+      niftiImage->nz = niftiImage->dim[ 3 ];
+      niftiImage->nt = niftiImage->dim[ 4 ];
+      niftiImage->nu = 1;
+      niftiImage->nv = 1;
+      niftiImage->nw = 1;
+
+      niftiImage->nvox = niftiImage->nx *
+                         niftiImage->ny *
+                         niftiImage->nz *
+                         niftiImage->nt; 
+
+      // storing resolution(s)
+      niftiImage->pixdim[ 0 ] = 0;
+      niftiImage->pixdim[ 1 ] = ( float )resolutionX;
+      niftiImage->pixdim[ 2 ] = ( float )resolutionY;
+      niftiImage->pixdim[ 3 ] = ( float )resolutionZ;
+      niftiImage->pixdim[ 4 ] = ( float )resolutionT;
+      niftiImage->pixdim[ 5 ] = 1.0;
+      niftiImage->pixdim[ 6 ] = 1.0;
+      niftiImage->pixdim[ 7 ] = 1.0;
+
+      niftiImage->dx = niftiImage->pixdim[ 1 ];
+      niftiImage->dy = niftiImage->pixdim[ 2 ];
+      niftiImage->dz = niftiImage->pixdim[ 3 ];
+      niftiImage->dt = niftiImage->pixdim[ 4 ];
+      niftiImage->du = 1.0;
+      niftiImage->dv = 1.0;
+      niftiImage->dw = 1.0;
+
+      // setting data type
+      niftiImage->datatype = this->getShortType();
+
+      // setting bytes per pixel and swap size
+      nifti_datatype_sizes( niftiImage->datatype,
+                            &niftiImage->nbyper,
+                            &niftiImage->swapsize );
+
+      // setting data scaling
+      getFloatValue( "nifti_scaling_slope",
+                     object,
+                     niftiImage->scl_slope );
+      getFloatValue( "nifti_scaling_intercept",
+                     object,
+                     niftiImage->scl_inter );
+      getFloatValue( "nifti_calibration_minimum",
+                     object,
+                     niftiImage->cal_min );
+      getFloatValue( "nifti_calibration_maximum",
+                     object,
+                     niftiImage->cal_max );
+
+      // setting MRI information
+      getInt32Value( "nifti_frequency_dimension",
+                     object,
+                     niftiImage->freq_dim );
+      getInt32Value( "nifti_phase_dimension",
+                     object,
+                     niftiImage->phase_dim );
+      getInt32Value( "nifti_slice_dimension",
+                     object,
+                     niftiImage->slice_dim );
+      getInt32Value( "nifti_slice_code",
+                     object,
+                     niftiImage->slice_code );
+      getInt32Value( "nifti_slice_start",
+                     object,
+                     niftiImage->slice_start );
+      getInt32Value( "nifti_slice_end",
+                     object,
+                     niftiImage->slice_end );
+      getFloatValue( "nifti_slice_duration",
+                     object,
+                     niftiImage->slice_duration );
+
+      // setting 3D image orientation and location
+
+      std::vector< std::string > referentials;
+      gkg::GenericObjectList transforms;
+
+      if ( object.getHeader().hasAttribute( "referentials" ) )
+      {
+
+        object.getHeader().getAttribute( "referentials", referentials );
+
+      }
+      if ( object.getHeader().hasAttribute( "transformations" ) )
+      {
+
+        object.getHeader().getAttribute( "transformations", transforms );
+
+      }
+
+      gkg::Scaling3d< float > scaling3d( niftiImage->dx,
+                                         niftiImage->dy,
+                                         niftiImage->dz );
+      
+
+      niftiImage->qform_code = NIFTI_XFORM_UNKNOWN;
+      niftiImage->sform_code = NIFTI_XFORM_UNKNOWN;
+
+      size_t r;
+      for ( r = 0; r < referentials.size(); r++ )
+      {
+
+        int32_t referentialCode = getReferentialCode( referentials[ r ] );
+
+        if ( ( ( referentialCode == NIFTI_XFORM_SCANNER_ANAT ) ||
+               ( referentialCode == NIFTI_XFORM_ALIGNED_ANAT ) ) &&
+             ( niftiImage->qform_code == NIFTI_XFORM_UNKNOWN ) )
+        {
+
+          niftiImage->qform_code = referentialCode;
+
+          std::vector< float >
+            transformVector = transforms[r]->template getValue<
+                                                       std::vector< float > >();
+
+          std::vector< float >
+            m = transform3d.compose(
+                  scaling3d ).compose(
+                    gkg::HomogeneousTransform3d< float >( transformVector ) ).
+                      getDirectCoefficients();
+
+          mat44 R;
+          int32_t i, j;
+          for ( j = 0; j < 4; j++ )
+          {
+
+            for ( i = 0; i < 4; i++ )
+            {
+
+              R.m[ i ][ j ] = m[ j + 4 * i ];
+
+            }
+
+          }
+          nifti_mat44_to_quatern( R,
+                                  &niftiImage->quatern_b,
+                                  &niftiImage->quatern_c,
+                                  &niftiImage->quatern_d,
+                                  &niftiImage->qoffset_x,
+                                  &niftiImage->qoffset_y,
+                                  &niftiImage->qoffset_z,
+                                  0,
+                                  0,
+                                  0,
+                                  &niftiImage->qfac );
+
+        }
+        else if ( niftiImage->sform_code == NIFTI_XFORM_UNKNOWN )
+        {
+
+          niftiImage->sform_code = referentialCode;
+
+          std::vector< float >
+            transformVector = transforms[r]->template getValue<
+                                                       std::vector< float > >();
+
+          std::vector< float >
+            m = transform3d.compose(
+                  scaling3d ).compose(
+                    gkg::HomogeneousTransform3d< float >( transformVector ) ).
+                      getDirectCoefficients();
+
+          int32_t i, j;
+          for ( j = 0; j < 4; j++ )
+          {
+
+            for ( i = 0; i < 4; i++ )
+            {
+
+              niftiImage->sto_xyz.m[ i ][ j ] = m[ j + 4 * i ];
+
+            }
+
+          }
+
+        }
+
+      }
+
+      if ( addTransformation )
+      {
+
+        if ( niftiImage->qform_code == NIFTI_XFORM_UNKNOWN )
+        {
+
+          niftiImage->qform_code = NIFTI_XFORM_SCANNER_ANAT;
+          niftiImage->quatern_b = 0.0;
+          niftiImage->quatern_c = 0.0;
+          niftiImage->quatern_d = 0.0;
+
+          niftiImage->qoffset_x = -( niftiImage->nx / 2.0 - 1.0 ) *
+                                  niftiImage->dx;
+          niftiImage->qoffset_y = -( niftiImage->ny / 2.0 - 1.0 ) *
+                                  niftiImage->dy;
+          niftiImage->qoffset_z = -( niftiImage->nz / 2.0 - 1.0 ) *
+                                  niftiImage->dz;
+          niftiImage->qfac = 1.0;
+
+        }
+
+      }
+
+      // setting unit of spatial and temporal dimensions
+      getFloatValue( "nifti_time_offset",
+                     object,
+                     niftiImage->toffset );
+      getInt32Value( "nifti_xyz_units",
+                     object,
+                     niftiImage->xyz_units );
+      getInt32Value( "nifti_time_units",
+                     object,
+                     niftiImage->time_units );
+
+      // setting interpretation of voxel data
+      getInt32Value( "nifti_intent_code",
+                     object,
+                     niftiImage->intent_code,
+                     NIFTI_INTENT_NONE );
+      getFloatValue( "nifti_intent_p1",
+                     object,
+                     niftiImage->intent_p1 );
+      getFloatValue( "nifti_intent_p2",
+                     object,
+                     niftiImage->intent_p2 );
+      getFloatValue( "nifti_intent_p3",
+                     object,
+                     niftiImage->intent_p3 );
+
+      std::string niftiIntentName = "";
+      getStringValue( "nifti_intent_name",
+                      object,
+                      niftiIntentName );
+      if ( niftiIntentName.empty() )
+      {
+
+        niftiImage->intent_name[ 0 ] = '\0';
+
+      }
+      else
+      {
+
+        strncpy( niftiImage->intent_name, niftiIntentName.c_str(), 15 );
+        niftiImage->intent_name[ 15 ] = '\0';
+
+      }
+
+      // setting description and auxiliary file
+      std::string niftiDescription = "";
+      getStringValue( "nifti_description",
+                      object,
+                      niftiDescription );
+      if ( niftiDescription.empty() )
+      {
+
+        strcpy( niftiImage->descrip, "written with P.T.K.\0" );
+
+      }
+      else
+      {
+
+        strncpy( niftiImage->intent_name, niftiDescription.c_str(), 79 );
+        niftiImage->descrip[ 79 ] = '\0';
+
+      }
+
+      std::string niftiAuxiliaryFile = "";
+      getStringValue( "nifti_auxiliary_file",
+                      object,
+                      niftiAuxiliaryFile );
+      if ( niftiAuxiliaryFile.empty() )
+      {
+
+        niftiImage->aux_file[ 0 ] = '\0';
+
+      }
+      else
+      {
+
+        strncpy( niftiImage->aux_file, niftiAuxiliaryFile.c_str(), 23 );
+        niftiImage->aux_file[ 23 ] = '\0';
+
+      }
+
+      // setting header extensions (not managed in gkg!)
+      niftiImage->num_ext = 0U;
+
+      // obtaining extension
+      std::string extension = ".hdr";
+      char* extensionChar = nifti_find_file_extension( name.c_str() );
+      if ( extensionChar )
+      {
+
+        extension = std::string( extensionChar );
+
+      }
+
+      if ( ( extension == ".hdr" ) ||
+           ( extension == ".img" ) ||
+           ( extension == ".hdr.gz" ) ||
+           ( extension == ".img.gz" ) )
+      {
+
+        niftiImage->nifti_type = NIFTI_FTYPE_NIFTI1_2;
+
+      }
+      else
+      {
+
+        niftiImage->nifti_type = NIFTI_FTYPE_NIFTI1_1;
+
+      }
+
+      // setting file names
+      nifti_set_filenames( niftiImage,
+                           this->getNameWithoutExtension( name ).c_str(),
+                           0, // do not check
+                           1 );
+
+      // setting data field
+      niftiImage->data = ( void* )calloc( 1, nifti_get_volsize( niftiImage ) );
+
+      // filling NIFTI data field
+      T* d = ( T* )niftiImage->data;
+      gkg::Vector3d< float > from, to;
+      int32_t t;
+      for ( t = 0; t < niftiImage->nt; t++ )
+      {
+
+        for ( to.z = 0; to.z < niftiImage->nz; to.z += 1.0 )
+        {
+
+          for ( to.y = 0; to.y < niftiImage->ny; to.y += 1.0 )
+          {
+
+            for ( to.x = 0; to.x < niftiImage->nx; to.x += 1.0 )
+            {
+
+              transform3d.getInverse( to, from );
+              *d = object( ( int32_t )rint( from.x ),
+                           ( int32_t )rint( from.y ),
+                           ( int32_t )rint( from.z ), t );
+              ++ d;
+
+            }
+
+          }
+
+        }
+
+      }
+
+      // writing both header and image
+      nifti_image_write_hdr_img( niftiImage, 1, "wb" );
+
+      // deleting allocated NIFTI struct
+      nifti_image_free( niftiImage );
+
+    }
+
+  }
+  GKG_CATCH( "template < class T > void gkg::NiftiDiskFormat< T >::write( "
+             "const std::string& name, gkg::Volume< T >& object, "
+             "bool ascii ) const" );
+
+}
+
+
+template < class T >
+bool gkg::NiftiDiskFormat< T >::hasReader() const
+{
+
+  return true;
+
+}
+
+
+template < class T >
+bool gkg::NiftiDiskFormat< T >::hasWriter() const
+{
+
+  return true;
+
+}
+
+
+template < class T >
+std::string gkg::NiftiDiskFormat< T >::getHeaderExtension() const
+{
+
+  return std::string( ".nii" ) + 
+         gkg::ConfigurationInfo::getInstance().getHeaderExtensionName();
+
+}
+
+
+template < class T >
+int16_t gkg::NiftiDiskFormat< T >::getShortType() const
+{
+
+  return ( int16_t )-1;
+
+}
+
+
+template < class T >
+void gkg::NiftiDiskFormat< T >::fillNiftiDictionary(
+                                        nifti_image* niftiImage,
+                                        gkg::Dictionary& niftiDictionary ) const
+{
+
+  try
+  {
+
+    int32_t i, j;
+
+    niftiDictionary[ "ndim" ] = niftiImage->ndim;
+    niftiDictionary[ "nx" ] = niftiImage->nx;
+    niftiDictionary[ "ny" ] = niftiImage->ny;
+    niftiDictionary[ "nz" ] = niftiImage->nz;
+    niftiDictionary[ "nt" ] = niftiImage->nt;
+    niftiDictionary[ "nu" ] = niftiImage->nu;
+    niftiDictionary[ "nv" ] = niftiImage->nv;
+    niftiDictionary[ "nw" ] = niftiImage->nw;
+    std::vector< short > dim( 8 );
+    for ( i = 0; i < 8; i++ )
+    {
+
+      dim[ i ] = niftiImage->dim[ i ];
+
+    }
+    niftiDictionary[ "dim" ] = dim;
+    niftiDictionary[ "nvox" ] = niftiImage->nvox;
+    niftiDictionary[ "nbyper" ] = niftiImage->nbyper;
+    niftiDictionary[ "datatype" ] = niftiImage->datatype;
+    niftiDictionary[ "dx" ] = niftiImage->dx;
+    niftiDictionary[ "dy" ] = niftiImage->dy;
+    niftiDictionary[ "dz" ] = niftiImage->dz;
+    niftiDictionary[ "dt" ] = niftiImage->dt;
+    niftiDictionary[ "du" ] = niftiImage->du;
+    niftiDictionary[ "dv" ] = niftiImage->dv;
+    niftiDictionary[ "dw" ] = niftiImage->dw;
+    std::vector< float > pixdim( 8 );
+    for ( i = 0; i < 8; i++ )
+    {
+
+      pixdim[ i ] = niftiImage->pixdim[ i ];
+
+    }
+    niftiDictionary[ "pixdim" ] = pixdim;
+    niftiDictionary[ "scl_slope" ] = niftiImage->scl_slope;
+    niftiDictionary[ "scl_inter" ] = niftiImage->scl_inter;
+    niftiDictionary[ "cal_max" ] = niftiImage->cal_max;
+    niftiDictionary[ "cal_min" ] = niftiImage->cal_min;
+    niftiDictionary[ "qform_code" ] = niftiImage->qform_code;
+    niftiDictionary[ "sform_code" ] = niftiImage->sform_code;
+    niftiDictionary[ "freq_dim" ] = niftiImage->freq_dim;
+    niftiDictionary[ "phase_dim" ] = niftiImage->phase_dim;
+    niftiDictionary[ "slice_dim" ] = niftiImage->slice_dim;
+    niftiDictionary[ "slice_code" ] = niftiImage->slice_code;
+    niftiDictionary[ "slice_start" ] = niftiImage->slice_start;
+    niftiDictionary[ "slice_end" ] = niftiImage->slice_end;
+    niftiDictionary[ "slice_duration" ] = niftiImage->slice_duration;
+    niftiDictionary[ "quatern_b" ] = niftiImage->quatern_b;
+    niftiDictionary[ "quatern_c" ] = niftiImage->quatern_c;
+    niftiDictionary[ "quatern_d" ] = niftiImage->quatern_d;
+    niftiDictionary[ "qoffset_x" ] = niftiImage->qoffset_x;
+    niftiDictionary[ "qoffset_y" ] = niftiImage->qoffset_y;
+    niftiDictionary[ "qoffset_z" ] = niftiImage->qoffset_z;
+    niftiDictionary[ "qfac" ] = niftiImage->qfac;
+    std::vector< float > qto_xyz( 16 );
+    for ( i = 0; i < 4; i++ )
+    {
+
+      for ( j = 0; j < 4; j++ )
+      {
+
+        qto_xyz[ i * 4 + j ] = niftiImage->qto_xyz.m[ i ][ j ];
+
+      }
+
+    }
+    niftiDictionary[ "qto_xyz" ] = qto_xyz;
+    std::vector< float > qto_ijk( 16 );
+    for ( i = 0; i < 4; i++ )
+    {
+
+      for ( j = 0; j < 4; j++ )
+      {
+
+        qto_ijk[ i * 4 + j ] = niftiImage->qto_ijk.m[ i ][ j ];
+
+      }
+
+    }
+    niftiDictionary[ "qto_ijk" ] = qto_ijk;
+    std::vector< float > sto_xyz( 16 );
+    for ( i = 0; i < 4; i++ )
+    {
+
+      for ( j = 0; j < 4; j++ )
+      {
+
+        sto_xyz[ i * 4 + j ] = niftiImage->sto_xyz.m[ i ][ j ];
+
+      }
+
+    }
+    niftiDictionary[ "sto_xyz" ] = sto_xyz;
+    std::vector< float > sto_ijk( 16 );
+    for ( i = 0; i < 4; i++ )
+    {
+
+      for ( j = 0; j < 4; j++ )
+      {
+
+        sto_ijk[ i * 4 + j ] = niftiImage->sto_ijk.m[ i ][ j ];
+
+      }
+
+    }
+    niftiDictionary[ "sto_ijk" ] = sto_ijk;
+    niftiDictionary[ "toffset" ] = niftiImage->toffset;
+    niftiDictionary[ "xyz_units" ] = niftiImage->xyz_units;
+    niftiDictionary[ "time_units" ] = niftiImage->time_units;
+    niftiDictionary[ "nifti_type" ] = niftiImage->nifti_type;
+    niftiDictionary[ "intent_code" ] = niftiImage->intent_code;
+    niftiDictionary[ "intent_p1" ] = niftiImage->intent_p1;
+    niftiDictionary[ "intent_p2" ] = niftiImage->intent_p2;
+    niftiDictionary[ "intent_p3" ] = niftiImage->intent_p3;
+    niftiDictionary[ "intent_name" ] = std::string( niftiImage->intent_name );
+    niftiDictionary[ "descrip" ] = std::string( niftiImage->descrip );
+    niftiDictionary[ "aux_file" ] = std::string( niftiImage->aux_file );
+    if ( niftiImage->fname )
+    {
+
+      niftiDictionary[ "fname" ] = std::string( niftiImage->fname );
+
+    }
+    if ( niftiImage->iname )
+    {
+
+      niftiDictionary[ "iname" ] = std::string( niftiImage->iname );
+
+    }
+    niftiDictionary[ "iname_offset" ] = niftiImage->iname_offset;
+    niftiDictionary[ "swapsize" ] = niftiImage->swapsize;
+    niftiDictionary[ "byteorder" ] = niftiImage->byteorder;
+
+  }
+  GKG_CATCH( "template < class T > "
+             "void gkg::NiftiDiskFormat< T >::fillNiftiDictionary( "
+             "nifti_image* niftiImage, "
+             "gkg::Dictionary& niftiDictionary ) const" );
+
+}
+
+
+template < class T >
+std::string 
+gkg::NiftiDiskFormat< T >::getReferentialName( int32_t transformCode ) const
+{
+
+  try
+  {
+
+    std::string referentialName = "Unknown transformation";
+    if ( transformCode == NIFTI_XFORM_UNKNOWN )
+    {
+
+      referentialName = "Arbitrary coordinates";
+
+    }
+    else if ( transformCode == NIFTI_XFORM_SCANNER_ANAT )
+    {
+
+      referentialName = "Scanner-based anatomical coordinates";
+
+    }
+    else if ( transformCode == NIFTI_XFORM_ALIGNED_ANAT )
+    {
+
+      referentialName =
+                   "Coordinates aligned to another file or to anatomical truth";
+
+    }
+    else if ( transformCode == NIFTI_XFORM_TALAIRACH )
+    {
+
+      referentialName = "Talairach-AC/PC-Anatomist";
+
+    }
+    else if ( transformCode == NIFTI_XFORM_MNI_152 )
+    {
+
+      referentialName = "Talairach-MNI template-SPM";
+
+    }
+
+    return referentialName;
+
+  }
+  GKG_CATCH( "template < class T > "
+             "std::string  "
+             "gkg::NiftiDiskFormat< T >::getReferentialName( "
+             "int32_t xformCode ) const" );
+
+}
+
+
+template < class T >
+int32_t
+gkg::NiftiDiskFormat< T >::getReferentialCode(
+                                      const std::string& referentialName ) const
+{
+
+  try
+  {
+
+    int32_t referentialCode = NIFTI_XFORM_UNKNOWN;
+    if ( referentialName == "Scanner-based anatomical coordinates" )
+    {
+
+      referentialCode = NIFTI_XFORM_SCANNER_ANAT;
+
+    }
+    else if ( referentialName ==
+              "Coordinates aligned to another file or to anatomical truth" )
+    {
+
+      referentialCode = NIFTI_XFORM_ALIGNED_ANAT;
+
+    }
+    else if ( referentialName == "Talairach-AC/PC-Anatomist" )
+    {
+
+      referentialCode = NIFTI_XFORM_TALAIRACH;
+
+    }
+    else if ( referentialName == "Talairach-MNI template-SPM" )
+    {
+
+      referentialCode = NIFTI_XFORM_MNI_152;
+
+    }
+    else
+    {
+
+      referentialCode = NIFTI_XFORM_UNKNOWN;
+
+    }
+
+    return referentialCode;
+
+  }
+  GKG_CATCH( "template < class T > "
+             "int32_t "
+             "gkg::NiftiDiskFormat< T >::getReferentialCode( "
+             "const std::string& referentialName ) const" );
+
+}
+
+
+template < class T >
+void gkg::NiftiDiskFormat< T >::getInt32Value(
+                                              const std::string& name,
+                                              const gkg::HeaderedObject& object,
+                                              int32_t& value,
+                                              int32_t defaultValue ) const
+{
+
+  try
+  {
+
+    value = defaultValue;
+    if ( object.getHeader().hasAttribute( name ) )
+    {
+
+      object.getHeader().getAttribute( name, value );
+
+    }
+
+  }
+  GKG_CATCH( "template < class T > "
+             "void gkg::NiftiDiskFormat< T >::getInt32Value( "
+             "const std::string& name, "
+             "const gkg::HeaderedObject& object, "
+             "int32_t& value, "
+             "int32_t defaultValue ) const" );
+
+}
+
+
+template < class T >
+void gkg::NiftiDiskFormat< T >::getFloatValue(
+                                              const std::string& name,
+                                              const gkg::HeaderedObject& object,
+                                              float& value,
+                                              float defaultValue ) const
+{
+
+  try
+  {
+
+    value = defaultValue;
+    if ( object.getHeader().hasAttribute( name ) )
+    {
+
+      object.getHeader().getAttribute( name, value );
+
+    }
+
+  }
+  GKG_CATCH( "template < class T > "
+             "void gkg::NiftiDiskFormat< T >::getFloatValue( "
+             "const std::string& name, "
+             "const gkg::HeaderedObject& object, "
+             "float& value, "
+             "float defaultValue ) const" );
+
+}
+
+
+template < class T >
+void gkg::NiftiDiskFormat< T >::getDoubleValue(
+                                              const std::string& name,
+                                              const gkg::HeaderedObject& object,
+                                              double& value,
+                                              double defaultValue ) const
+{
+
+  try
+  {
+
+    value = defaultValue;
+    if ( object.getHeader().hasAttribute( name ) )
+    {
+
+      object.getHeader().getAttribute( name, value );
+
+    }
+
+  }
+  GKG_CATCH( "template < class T > "
+             "void gkg::NiftiDiskFormat< T >::getDoubleValue( "
+             "const std::string& name, "
+             "const gkg::HeaderedObject& object, "
+             "double& value, "
+             "double defaultValue ) const" );
+
+}
+
+
+template < class T >
+void gkg::NiftiDiskFormat< T >::getStringValue(
+                                         const std::string& name,
+                                         const gkg::HeaderedObject& object,
+                                         std::string& value,
+                                         const std::string& defaultValue ) const
+{
+
+  try
+  {
+
+    value = defaultValue;
+    if ( object.getHeader().hasAttribute( name ) )
+    {
+
+      object.getHeader().getAttribute( name, value );
+
+    }
+
+  }
+  GKG_CATCH( "template < class T > "
+             "void gkg::NiftiDiskFormat< T >::getStringValue( "
+             "const std::string& name, "
+             "const gkg::HeaderedObject& object, "
+             "std::string& value, "
+             "const std::string& defaultValue ) const" );
+
+}
+
+
+// specializations
+
+
+// boolean are managed as single bit, so we must get or put boolean items once 
+// a time and we cannot use a pointer to boolean items
+// boolean are managed as single bit, so we must write boolean items once a time
+// and we cannot use a pointer to boolean items
+
+namespace gkg
+{
+
+
+template <>
+int16_t NiftiDiskFormat< int8_t >::getShortType() const
+{
+
+  return DT_INT8;
+
+}
+
+
+template <>
+short NiftiDiskFormat< uint8_t >::getShortType() const
+{
+
+  return DT_UINT8;
+
+}
+
+
+template <>
+short NiftiDiskFormat< int16_t >::getShortType() const
+{
+
+  return DT_INT16;
+
+}
+
+
+template <>
+short NiftiDiskFormat< uint16_t >::getShortType() const
+{
+
+  return DT_UINT16;
+
+}
+
+
+template <>
+short NiftiDiskFormat< int32_t >::getShortType() const
+{
+
+  return DT_INT32;
+
+}
+
+
+template <>
+short NiftiDiskFormat< uint32_t >::getShortType() const
+{
+
+  return DT_UINT32;
+
+}
+
+
+template <>
+short NiftiDiskFormat< float >::getShortType() const
+{
+
+  return DT_FLOAT32;
+
+}
+
+
+template <>
+short NiftiDiskFormat< double >::getShortType() const
+{
+
+  return DT_DOUBLE;
+
+}
+
+
+}
+
+
+//
+// NIFTI disk format singleton instanciation
+//
+
+template class gkg::NiftiDiskFormat< int8_t >;
+template class gkg::NiftiDiskFormat< uint8_t >;
+template class gkg::NiftiDiskFormat< int16_t >;
+template class gkg::NiftiDiskFormat< uint16_t >;
+template class gkg::NiftiDiskFormat< int32_t >;
+template class gkg::NiftiDiskFormat< uint32_t >;
+template class gkg::NiftiDiskFormat< float >;
+template class gkg::NiftiDiskFormat< double >;
+
+
+//
+// registrating standard NIFTI disk format(s) for "Volume" object factory
+//
+
+static bool initialize()
+{
+
+  try
+  {
+
+    gkg::DiskFormatFactory< gkg::Volume< int8_t > 
+                          >::getInstance().registerDiskFormat(
+         gkg::NiftiDiskFormat< int8_t >::getInstance().getName(),
+         &gkg::NiftiDiskFormat< int8_t >::getInstance() );
+    gkg::DiskFormatFactory< gkg::Volume< uint8_t > 
+                          >::getInstance().registerDiskFormat(
+         gkg::NiftiDiskFormat< uint8_t >::getInstance().getName(),
+         &gkg::NiftiDiskFormat< uint8_t >::getInstance() );
+    gkg::DiskFormatFactory< gkg::Volume< int16_t > 
+                          >::getInstance().registerDiskFormat(
+         gkg::NiftiDiskFormat< int16_t >::getInstance().getName(),
+         &gkg::NiftiDiskFormat< int16_t >::getInstance() );
+    gkg::DiskFormatFactory< gkg::Volume< uint16_t > 
+                          >::getInstance().registerDiskFormat(
+         gkg::NiftiDiskFormat< uint16_t >::getInstance().getName(),
+         &gkg::NiftiDiskFormat< uint16_t >::getInstance() );
+    gkg::DiskFormatFactory< gkg::Volume< int32_t > 
+                          >::getInstance().registerDiskFormat(
+         gkg::NiftiDiskFormat< int32_t >::getInstance().getName(),
+         &gkg::NiftiDiskFormat< int32_t >::getInstance() );
+    gkg::DiskFormatFactory< gkg::Volume< uint32_t > 
+                          >::getInstance().registerDiskFormat(
+         gkg::NiftiDiskFormat< uint32_t >::getInstance().getName(),
+         &gkg::NiftiDiskFormat< uint32_t >::getInstance() );
+    gkg::DiskFormatFactory< gkg::Volume< float > 
+                          >::getInstance().registerDiskFormat(
+         gkg::NiftiDiskFormat< float >::getInstance().getName(),
+         &gkg::NiftiDiskFormat< float >::getInstance() );
+    gkg::DiskFormatFactory< gkg::Volume< double > 
+                          >::getInstance().registerDiskFormat(
+         gkg::NiftiDiskFormat< double >::getInstance().getName(),
+         &gkg::NiftiDiskFormat< double >::getInstance() );
+
+    return true;
+
+  }
+  GKG_CATCH( "NIFTI disk format registration: " )
+
+}
+
+static bool initialized = initialize();

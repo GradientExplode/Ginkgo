@@ -1,0 +1,49 @@
+attributes =
+{
+
+  "populations":
+    {
+      "fiber-population-01":
+        {
+          "diffusivity_in_um2_per_us_distribution":
+            {
+              "type": "gamma-distribution",
+              "parameters":
+                {
+                  "mean": 3e-3,
+                  "stddev": 0.1e-3
+                }
+            },
+          "permeability_distribution":
+            {
+              "type": "gamma-distribution",
+              "parameters":
+                {
+                  "mean": 0.2,
+                  "stddev": 0.02
+                }
+            }
+        },
+      "neuron-population-01":
+        {
+          "diffusivity_in_um2_per_us_distribution":
+            {
+              "type": "gamma-distribution",
+              "parameters":
+                {
+                  "mean": 2.8e-3,
+                  "stddev": 0.1e-3
+                }
+            },
+          "permeability_distribution":
+            {
+              "type": "gamma-distribution",
+              "parameters":
+                {
+                  "mean": 0.4,
+                  "stddev": 0.02
+                }
+            }
+        }
+    }
+}

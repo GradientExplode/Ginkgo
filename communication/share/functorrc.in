@@ -1,0 +1,16 @@
+attributes = {
+  'plugins' : [
+    'libgkg-communication-plugin-functors.so',
+    'libgkg-processing-plugin-functors.so',
+    'libgkg-fmri-plugin-functors.so',
+    'libgkg-dmri-plugin-functors.so',
+    ${GINKGO_GLOBAL_TRACTOGRAPHY_PLUGIN_FUNCTOR},
+    ${GINKGO_DARTEL_PLUGIN_FUNCTOR},
+    'libgkg-mri-reconstruction-plugin-functors.so',
+    'libgkg-qmri-plugin-functors.so',
+    'libgkg-deep-nuclei-plugin-functors.so',
+    'libgkg-graphics-QtGL-plugin-functors.so',
+    'libgkg-graphics-X11-plugin-functors.so',
+    ${GINKGO_SIMULATION_PLUGIN_FUNCTOR}
+  ]
+}

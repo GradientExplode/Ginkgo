@@ -1,0 +1,11 @@
+attributes = {
+  'plugins' : [
+    ${GINKGO_GSL_LAPACK_PLUGIN},
+    ${GINKGO_DICOM_PLUGIN},
+    ${GINKGO_NIFTI_PLUGIN},
+    ${GINKGO_SVM_PLUGIN},
+    ${GINKGO_CGAL_PLUGIN},
+    ${GINKGO_VTK_PLUGIN},
+    ${GINKGO_PLIHDF5_PLUGIN}
+  ]
+}

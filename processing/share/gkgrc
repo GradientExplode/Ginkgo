@@ -1,0 +1,10 @@
+attributes = {
+  'header_extension_name' : '.minf',
+  'functional_volume_dimension' : '4D',
+  'csv_separator' : ' ',
+  'memory_mapping_page_size' : 4096,
+  'memory_mapping_switch_factor' : 0.9,
+  'memory_mapping_verbosity' : 0,
+  'number_of_cpu_to_use' : 0
+
+}
